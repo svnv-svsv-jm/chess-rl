@@ -36,7 +36,7 @@ POETRY=poetry
 # dev dependencies
 install-init:
 	$(PYTHON_EXEC) pip install --upgrade pip
-	$(PYTHON_EXEC) pip install --upgrade setuptools virtualenv poetry
+	$(PYTHON_EXEC) pip install --upgrade poetry
 
 install: install-init
 	$(PYTHON_EXEC) poetry install --no-cache

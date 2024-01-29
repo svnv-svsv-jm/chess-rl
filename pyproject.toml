@@ -1,11 +1,11 @@
 [tool.poetry]
-name = "chess-rl"
+name = "shark-chess"
 version = "0.0.1"
 description = "Reinforcement Learning for Chess."
 authors = ["Gianmarco <janmail1990@gmail.com>"]
 license = "LICENSE"
 readme = "README.md"
-packages = [{ include = "package", from = "src" }]
+packages = [{ include = "*", from = "src" }]
 include = ["*.py", "src/**/*.json", "src/**/*.toml"]
 exclude = ["tests/*"]
 
@@ -20,12 +20,18 @@ requires = ["poetry-core>=1.0.0", "cython"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.poetry.dependencies]
-python = ">=3.8,<3.11"
+python = ">=3.10,<3.11"
 pyrootutils = "*"
 loguru = "*"
 jupyter = "*"
 jupyterlab_server = "*"
 jupyterlab = "*"
+python-chess = "^1.999"
+lightning = "^2.1.3"
+pydantic = "^2.6.0"
+gymnasium = "^0.29.1"
+pygame = "^2.5.2"
+torchrl = "^0.2.1"
 
 [tool.poetry.dev-dependencies]
 black = { extras = ["jupyter"], version = "*" }

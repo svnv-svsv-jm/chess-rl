@@ -104,7 +104,9 @@ disable=raw-checker-failed,
         multiple-imports,
         use-dict-literal,
         unused-argument,
-        unused-import
+        unused-import,
+        arguments-differ,
+        invalid-name
 
 # Enable the message, report, category or checker with the given id(s). You can
 # either give multiple identifier separated by comma (,) or put this option
