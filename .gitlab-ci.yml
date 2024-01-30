@@ -24,17 +24,18 @@ pytest-python:
   before_script:
     - apt-get update -qy  # Update package lists
     - apt-get install -y stockfish  # Install stockfish
+    - which stockfish  # Check installation
     - pip install --upgrade pip virtualenv
     - virtualenv .venv
     - source .venv/bin/activate
     - make install
   script:
     - export CHESS_ENGINE_EXECUTABLE=$(which stockfish)
-    - chmod 777 $CHESS_ENGINE_EXECUTABLE
+    - chmod 777 "$CHESS_ENGINE_EXECUTABLE"
     - make test
 
 # -----------
-# Automatic 
+# Automatic
 # -----------
 update_main:
   stage: deploy
