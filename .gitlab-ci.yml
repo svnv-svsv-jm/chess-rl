@@ -15,7 +15,7 @@ variables:
 pytest-python:
   parallel:
     matrix:
-      - IMAGE: ['python:3.10.10']
+      - IMAGE: ['arm64v8/python:3.10.10']
   image: $IMAGE
   stage: test
   only:
@@ -29,6 +29,7 @@ pytest-python:
     - source .venv/bin/activate
     - make install
   script:
+    - export CHESS_ENGINE_EXECUTABLE=$(which stockfish)
     - make pytest
 
 # -----------
