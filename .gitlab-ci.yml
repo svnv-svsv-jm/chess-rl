@@ -22,6 +22,8 @@ pytest-python:
     - merge_requests
     - develop
   before_script:
+    - sudo apt-get install scid
+    - sudo apt-get install stockfish
     - pip install --upgrade pip virtualenv
     - virtualenv /$PROJECT_NAME
     - source /$PROJECT_NAME/bin/activate
