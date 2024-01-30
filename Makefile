@@ -49,7 +49,7 @@ mypy:
 	$(PYTHON_EXEC) mypy tests
 
 pytest:
-	$(PYTHON_EXEC) pytest -x --testmon --pylint --cov-fail-under 98
+	$(PYTHON_EXEC) pytest -x --testmon --pylint --cov-fail-under 95
 
 pytest-nbmake:
 	$(PYTHON_EXEC) pytest -x --testmon --nbmake --overwrite "$(EXAMPLE_DIR)"

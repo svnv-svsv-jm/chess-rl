@@ -81,7 +81,7 @@ class Agent:
         exp = Experience(
             state=self.state,
             action=action,
-            reward=reward,
+            reward=float(reward),
             done=done,
             next_state=next_state,
         )
@@ -91,7 +91,7 @@ class Agent:
         self.state = next_state
         if done:
             self.reset()
-        return reward, done
+        return float(reward), done
 
 
 def _fix_fucked_up_state(next_state: np.ndarray) -> np.ndarray:

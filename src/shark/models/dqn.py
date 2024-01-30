@@ -73,8 +73,8 @@ class DQN(pl.LightningModule):
         self.obs_size = int(self.env.observation_space.shape[0])  # type: ignore
         self.n_actions = int(self.env.action_space.n)  # type: ignore
 
-        self.net = MLP(self.obs_size, self.n_actions, hidden_dims=hidden_dims, normalize=False)
-        self.target_net = MLP(self.obs_size, self.n_actions, hidden_dims=hidden_dims)
+        self.net = MLP(self.n_actions, hidden_dims=hidden_dims, normalize=False)
+        self.target_net = MLP(self.n_actions, hidden_dims=hidden_dims)
 
         self.buffer = ReplayBuffer(replay_size)
         self.agent = Agent(self.env, self.buffer)

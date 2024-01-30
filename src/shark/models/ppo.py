@@ -3,8 +3,6 @@ __all__ = ["PPO"]
 from loguru import logger
 import typing as ty
 
-from collections import defaultdict
-import matplotlib.pyplot as plt
 import lightning.pytorch as pl
 from lightning.fabric.utilities.types import LRScheduler
 from lightning.pytorch.utilities.types import OptimizerLRSchedulerConfig, LRSchedulerConfigType
@@ -30,8 +28,8 @@ from torchrl.envs.utils import check_env_specs, ExplorationType, set_exploration
 from torchrl.modules import ProbabilisticActor, TanhNormal, ValueOperator
 from torchrl.objectives import ClipPPOLoss
 from torchrl.objectives.value import GAE
-from tqdm import tqdm
 
+from shark.nn import MLP
 from shark.utils import find_device
 
 
@@ -58,7 +56,28 @@ class PPO(pl.LightningModule):
         lr_monitor: str = "loss/train",
         lr_monitor_strict: bool = False,
         rollout_max_steps: int = 1000,
+        n_mlp_layers: int = 3,
+        in_keys: ty.List[str] = ["observation"],
     ) -> None:
+        """
+        Args:
+            env_name (str, optional): _description_. Defaults to "InvertedDoublePendulum-v4".
+            num_cells (int, optional): _description_. Defaults to 256.
+            lr (float, optional): _description_. Defaults to 3e-4.
+            max_grad_norm (float, optional): _description_. Defaults to 1.0.
+            frame_skip (int, optional): _description_. Defaults to 1.
+            frames_per_batch (int, optional): _description_. Defaults to 100.
+            total_frames (int, optional): _description_. Defaults to None.
+            accelerator (ty.Union[str, torch.device], optional): _description_. Defaults to "cpu".
+            sub_batch_size (int, optional): _description_. Defaults to 64.
+            gamma (float, optional): _description_. Defaults to 0.99.
+            lmbda (float, optional): _description_. Defaults to 0.95.
+            entropy_eps (float, optional): _description_. Defaults to 1e-4.
+            lr_monitor (str, optional): _description_. Defaults to "loss/train".
+            lr_monitor_strict (bool, optional): _description_. Defaults to False.
+            rollout_max_steps (int, optional): _description_. Defaults to 1000.
+            n_mlp_layers (int, optional): _description_. Defaults to 3.
+        """
         super().__init__()
         self.save_hyperparameters()
         self.max_grad_norm = max_grad_norm
@@ -74,25 +93,26 @@ class PPO(pl.LightningModule):
         self.lmbda = lmbda
         self.entropy_eps = entropy_eps
         self.rollout_max_steps = rollout_max_steps
+        self.in_keys = in_keys
         device = find_device(accelerator)
+        # Environment
         self.base_env = GymEnv(
             env_name,
             device=device,
             frame_skip=frame_skip,
         )
-        obs_norm = ObservationNorm(in_keys=["observation"])
+        # Env transformations
+        obs_norm = ObservationNorm(in_keys=self.in_keys)
         self.env = TransformedEnv(
             self.base_env,
             Compose(
-                # normalize observations
                 obs_norm,
-                DoubleToFloat(
-                    in_keys=["observation"],
-                ),
+                DoubleToFloat(in_keys=self.in_keys),
                 StepCounter(),
             ),
         )
         obs_norm.init_stats(num_iter=1000, reduce_dim=0, cat_dim=0)
+        # Sanity check
         logger.debug(f"normalization constant shape: {self.env.transform[0].loc.shape}")
         logger.debug(f"observation_spec: {self.env.observation_spec}")
         logger.debug(f"reward_spec: {self.env.reward_spec}")
@@ -101,19 +121,15 @@ class PPO(pl.LightningModule):
         logger.debug(f"state_spec: {self.env.state_spec}")
         check_env_specs(self.env)
         # Actor
-        self.actor_net = nn.Sequential(
-            nn.LazyLinear(num_cells, device=device),
-            nn.Tanh(),
-            nn.LazyLinear(num_cells, device=device),
-            nn.Tanh(),
-            nn.LazyLinear(num_cells, device=device),
-            nn.Tanh(),
-            nn.LazyLinear(2 * self.env.action_spec.shape[-1], device=device),
-            NormalParamExtractor(),
-        )
+        self.actor_net = MLP(
+            out_features=2 * self.env.action_spec.shape[-1],
+            hidden_dims=[num_cells] * n_mlp_layers,
+            tanh=True,
+            last_activation=NormalParamExtractor(),
+        ).to(device)
         self.policy_module = TensorDictModule(
             self.actor_net,
-            in_keys=["observation"],
+            in_keys=self.in_keys,
             out_keys=["loc", "scale"],
         )
         self.policy_module = ProbabilisticActor(
@@ -125,22 +141,17 @@ class PPO(pl.LightningModule):
                 "min": self.env.action_spec.space.minimum,
                 "max": self.env.action_spec.space.maximum,
             },
-            return_log_prob=True,
-            # we'll need the log-prob for the numerator of the importance weights
+            return_log_prob=True,  # we'll need the log-prob for the numerator of the importance weights
         )
         # Critic
-        self.value_net = nn.Sequential(
-            nn.LazyLinear(num_cells, device=device),
-            nn.Tanh(),
-            nn.LazyLinear(num_cells, device=device),
-            nn.Tanh(),
-            nn.LazyLinear(num_cells, device=device),
-            nn.Tanh(),
-            nn.LazyLinear(1, device=device),
-        )
+        self.value_net = MLP(
+            out_features=1,
+            hidden_dims=[num_cells] * n_mlp_layers,
+            tanh=True,
+        ).to(device)
         self.value_module = ValueOperator(
             module=self.value_net,
-            in_keys=["observation"],
+            in_keys=self.in_keys,
         )
         # ReplayBuffer
         self.replay_buffer = ReplayBuffer(

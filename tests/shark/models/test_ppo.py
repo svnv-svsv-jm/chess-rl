@@ -19,6 +19,7 @@ def test_ppo() -> None:
         env_name="InvertedDoublePendulum-v4",
         frame_skip=frame_skip,
         frames_per_batch=frames_per_batch,
+        n_mlp_layers=7,
     )
     # Rollout
     rollout = model.env.rollout(3)
