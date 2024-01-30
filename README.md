@@ -15,7 +15,6 @@ brew install stockfish
 
 ```bash
 # Ubuntu
-sudo apt-get install scid
 sudo apt-get install stockfish
 ```
 
