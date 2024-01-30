@@ -22,11 +22,12 @@ pytest-python:
     - merge_requests
     - develop
   before_script:
-    - apt-get install scid
-    - apt-get install stockfish
+    - apt-get update -qy  # Update package lists
+    - apt-get install -y scid  # Install scid
+    - apt-get install -y stockfish  # Install stockfish
     - pip install --upgrade pip virtualenv
-    - virtualenv /$PROJECT_NAME
-    - source /$PROJECT_NAME/bin/activate
+    - virtualenv .venv
+    - source .venv/bin/activate
     - make install
   script:
     - make pytest
