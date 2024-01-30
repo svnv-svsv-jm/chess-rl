@@ -5,6 +5,7 @@ stages:
 
 variables:
   PROJECT_NAME: shark-chess
+  MAIN_BRANCH: "$CI_DEFAULT_BRANCH"
 
 
 # -----------
@@ -28,14 +29,17 @@ pytest-python:
   script:
     - make pytest
 
-update_master:
+# -----------
+# Automatic 
+# -----------
+update_main:
   stage: deploy
   only:
     - develop
   script:
-    - git checkout master
+    - git checkout $MAIN_BRANCH
     - git merge develop
-    - git push origin master
+    - git push origin $MAIN_BRANCH
 
 # -----------
 # Release
