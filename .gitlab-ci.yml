@@ -23,6 +23,7 @@ pytest-python:
     - develop
   before_script:
     - apt-get update -qy  # Update package lists
+    - apt-get install -y apt-utils
     - apt-get install -y stockfish  # Install stockfish
     - which stockfish  # Check installation
     - pip install --upgrade pip virtualenv
