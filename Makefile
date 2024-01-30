@@ -45,12 +45,16 @@ install: install-init
 # -----------
 # testing
 # -----------
-pytest:
-	$(PYTHON_EXEC) pytest -x --testmon --pylint --cov-fail-under 98
-	$(PYTHON_EXEC) pytest -x --testmon --nbmake --overwrite "$(EXAMPLE_DIR)"
+mypy:
 	$(PYTHON_EXEC) mypy test
 
-test: pytest
+pytest:
+	$(PYTHON_EXEC) pytest -x --testmon --pylint --cov-fail-under 98
+
+pytest-nbmake:
+	$(PYTHON_EXEC) pytest -x --testmon --nbmake --overwrite "$(EXAMPLE_DIR)"
+
+test: mypy pytest pytest-nbmake
 
 
 # -----------

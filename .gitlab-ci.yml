@@ -30,7 +30,7 @@ pytest-python:
     - make install
   script:
     - export CHESS_ENGINE_EXECUTABLE=$(which stockfish)
-    - make pytest
+    - make test
 
 # -----------
 # Automatic 
