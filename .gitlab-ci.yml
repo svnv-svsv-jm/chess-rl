@@ -23,7 +23,6 @@ pytest-python:
     - develop
   before_script:
     - apt-get update -qy  # Update package lists
-    - apt-get install -y scid  # Install scid
     - apt-get install -y stockfish  # Install stockfish
     - pip install --upgrade pip virtualenv
     - virtualenv .venv
