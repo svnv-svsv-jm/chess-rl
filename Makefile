@@ -46,7 +46,7 @@ install: install-init
 # testing
 # -----------
 mypy:
-	$(PYTHON_EXEC) mypy test
+	$(PYTHON_EXEC) mypy tests
 
 pytest:
 	$(PYTHON_EXEC) pytest -x --testmon --pylint --cov-fail-under 98
