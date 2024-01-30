@@ -19,6 +19,7 @@ pytest-python:
   stage: test
   only:
     - merge_requests
+    - develop
   before_script:
     - pip install --upgrade pip virtualenv
     - virtualenv /$PROJECT_NAME
@@ -27,6 +28,14 @@ pytest-python:
   script:
     - make pytest
 
+update_master:
+  stage: deploy
+  only:
+    - develop
+  script:
+    - git checkout master
+    - git merge develop
+    - git push origin master
 
 # -----------
 # Release
