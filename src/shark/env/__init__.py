@@ -1,3 +1,5 @@
+from .chess import *
+
 # from gymnasium.envs.registration import register
 
 # register(

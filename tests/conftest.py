@@ -21,7 +21,7 @@ root = pyrootutils.setup_root(
 
 
 @pytest.fixture(scope="session")
-def engine_executable() -> ty.Union[str, ty.List[str]]:
+def engine_executable() -> str:
     """Chess engine executable path or command."""
     return os.environ.get("CHESS_ENGINE_EXECUTABLE", "stockfish")
 
