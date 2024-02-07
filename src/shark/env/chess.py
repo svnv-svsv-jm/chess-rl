@@ -146,7 +146,7 @@ class ChessEnv(EnvBase):
         action: Tensor = tensordict["action"]
         action = action.float()
         device = action.device
-        logger.trace(f"Action ({action.size()}:{device}): action")
+        logger.trace(f"Action ({action.size()}:{device}): {action.max()}")
         # Softmax to have all positives
         if self.softmax:
             action = action.softmax(-1)
@@ -162,7 +162,7 @@ class ChessEnv(EnvBase):
         action = (action * mask).float()
         # Get action and its UCI
         # Action is a probability distribution over the action space
-        logger.trace(f"Action: {action}")
+        logger.trace(f"Action ({action.size()}:{device}): {action.max()}")
         uci = action_one_hot_to_uci(action)
         logger.trace(f"Move: {uci}")
         assert self.board.is_legal(chess.Move.from_uci(uci)), f"Illegal move: {uci}"

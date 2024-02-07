@@ -24,6 +24,7 @@ class CollectorDataset(IterableDataset):
         device: torch.device,
         split_trajs: bool = False,
         batch_size: int = 1,
+        init_random_frames: int = 1,
     ) -> None:
         # Attributes
         self.batch_size = batch_size
@@ -41,6 +42,7 @@ class CollectorDataset(IterableDataset):
             device=self.device,
             storing_device=self.device,
             split_trajs=split_trajs,
+            init_random_frames=init_random_frames,
         )
         # ReplayBuffer
         self.replay_buffer = ReplayBuffer(
