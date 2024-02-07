@@ -64,7 +64,7 @@ class PPO(pl.LightningModule):
         in_keys: ty.List[str] = ["observation"],
         flatten: bool = False,
         flatten_start_dim: int = 0,
-        legacy: bool = True,
+        legacy: bool = False,
     ) -> None:
         """
         Args:
