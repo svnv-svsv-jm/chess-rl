@@ -14,12 +14,15 @@ from shark.models import PPO
 def test_ppo() -> None:
     """Test PPO on InvertedDoublePendulum."""
     frame_skip = 1
-    frames_per_batch = frame_skip * 100
+    frames_per_batch = frame_skip * 10
+    total_frames = 100
     model = PPO(
         env="InvertedDoublePendulum-v4",
         frame_skip=frame_skip,
         frames_per_batch=frames_per_batch,
+        total_frames=total_frames,
         n_mlp_layers=7,
+        legacy=False,
     )
     # Rollout
     rollout = model.env.rollout(3)
@@ -29,6 +32,7 @@ def test_ppo() -> None:
     logger.info(f"Running policy: {model.policy_module(model.env.reset())}")
     logger.info(f"Running value: {model.value_module(model.env.reset())}")
     # Collector
+    model.setup()
     collector = model.train_dataloader()
     for _, tensordict_data in enumerate(collector):
         logger.info(f"Tensordict data:\n{tensordict_data}")
@@ -76,5 +80,5 @@ def test_ppo() -> None:
 
 if __name__ == "__main__":
     logger.remove()
-    logger.add(sys.stderr, level="DEBUG")
+    logger.add(sys.stderr, level="TRACE")
     pytest.main([__file__, "-x", "-s", "--pylint"])

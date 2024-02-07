@@ -32,6 +32,7 @@ from torchrl.modules import ProbabilisticActor, TanhNormal, ValueOperator
 from torchrl.objectives import ClipPPOLoss
 from torchrl.objectives.value import GAE
 
+from shark.datasets import CollectorDataset
 from shark.nn import MLP
 from shark.utils import find_device
 
@@ -61,6 +62,9 @@ class PPO(pl.LightningModule):
         rollout_max_steps: int = 1000,
         n_mlp_layers: int = 3,
         in_keys: ty.List[str] = ["observation"],
+        flatten: bool = False,
+        flatten_start_dim: int = 0,
+        legacy: bool = True,
     ) -> None:
         """
         Args:
@@ -83,6 +87,7 @@ class PPO(pl.LightningModule):
         """
         super().__init__()
         self.save_hyperparameters(ignore=["env"])
+        self.legacy = legacy
         self.max_grad_norm = max_grad_norm
         self.num_cells = num_cells
         self.lr = lr
@@ -127,8 +132,8 @@ class PPO(pl.LightningModule):
             hidden_dims=[num_cells] * n_mlp_layers,
             tanh=True,
             last_activation=NormalParamExtractor(),
-            flatten=True,
-            flatten_start_dim=0,
+            flatten=flatten,
+            flatten_start_dim=flatten_start_dim,
         ).to(device)
         example_batch = torch.zeros(in_shape).to(device).unsqueeze(0)
         out = self.actor_net(example_batch)  # pylint: disable=not-callable
@@ -156,18 +161,13 @@ class PPO(pl.LightningModule):
             out_features=1,
             hidden_dims=[num_cells] * n_mlp_layers,
             tanh=True,
-            flatten=True,
-            flatten_start_dim=0,
+            flatten=flatten,
+            flatten_start_dim=flatten_start_dim,
         ).to(device)
         logger.debug(f"Initialized critic: {self.value_net}")
         self.value_module = ValueOperator(
             module=self.value_net,
             in_keys=self.in_keys,
-        )
-        # ReplayBuffer
-        self.replay_buffer = ReplayBuffer(
-            storage=LazyTensorStorage(frames_per_batch),
-            sampler=SamplerWithoutReplacement(),
         )
         # Loss
         self.advantage_module = GAE(
@@ -195,6 +195,31 @@ class PPO(pl.LightningModule):
         self.scheduler: torch.optim.lr_scheduler.CosineAnnealingLR
         self.lr_monitor = lr_monitor
         self.lr_monitor_strict = lr_monitor_strict
+        self.dataset: CollectorDataset
+
+    @property
+    def replay_buffer(self) -> ReplayBuffer:
+        """Gets replay buffer from collector."""
+        return self.dataset.replay_buffer
+
+    def setup(self, stage: str = None) -> None:
+        """Set up collector."""
+        logger.debug(f"device: {self.device}")
+        self.dataset = CollectorDataset(
+            env=self.env,
+            policy_module=self.policy_module,
+            frames_per_batch=self.frames_per_batch,
+            total_frames=self.total_frames,
+            device=self.device,
+            # batch_size=self.sub_batch_size,
+        )
+
+    def train_dataloader(self) -> ty.Iterable[TensorDict]:
+        """Create DataLoader for training."""
+        if not self.legacy:
+            return self.dataset
+        collector = self.get_collector()
+        return collector
 
     def get_collector(self) -> SyncDataCollector:
         """Create `SyncDataCollector`."""
@@ -206,21 +231,6 @@ class PPO(pl.LightningModule):
             split_trajs=False,
             device=self.device,
         )
-        return collector
-
-    # def prepare_data(self) -> None:
-    #     """Set up collector."""
-    #     collector = self.get_collector()
-    #     for i, tensordict_data in enumerate(collector):
-    #         pass
-
-    # def setup(self, stage: str) -> None:
-    #     """Set up collector."""
-    #     collector = self.get_collector()
-
-    def train_dataloader(self) -> DataLoader:
-        """Create DataLoader for training."""
-        collector = self.get_collector()
         return collector
 
     def configure_optimizers(self) -> OptimizerLRSchedulerConfig:
@@ -252,7 +262,17 @@ class PPO(pl.LightningModule):
         n = int(n)
         if batch_idx % n == 0:
             self.rollout()
+        # Return loss
         return loss
+
+    def on_train_epoch_end(self) -> None:
+        """Check if we have to stop. For some reason, Lightning can't understand this. Probably because we are using an `IterableDataset`."""
+        if (
+            self.trainer.global_step > self.trainer.max_steps
+            or self.trainer.current_epoch > self.trainer.max_epochs
+            or self.trainer.global_step > self.total_frames
+        ):
+            self.trainer.should_stop = True
 
     def manual_optimization_step(self, loss: Tensor) -> None:
         """Steps to run if manual optimization is enabled."""
@@ -305,14 +325,15 @@ class PPO(pl.LightningModule):
         tag: str = "train",
     ) -> Tensor:
         """Common step."""
+        if self.legacy:
+            data_view: TensorDict = tensordict_data.reshape(-1)
+            self.replay_buffer.extend(data_view.cpu())
         logger.trace(f"[{batch_idx}] Batch: {tensordict_data.batch_size}")
         # We'll need an "advantage" signal to make PPO work.
         # We re-compute it at each epoch as its value depends on the value
         # network which is updated in the inner loop.
         with torch.no_grad():
             self.advantage_module(tensordict_data)
-        data_view: TensorDict = tensordict_data.reshape(-1)
-        self.replay_buffer.extend(data_view.cpu())
         loss = torch.tensor(0.0).to(self.device)
         for _ in range(self.frames_per_batch // self.sub_batch_size):
             subdata: TensorDict = self.replay_buffer.sample(self.sub_batch_size)

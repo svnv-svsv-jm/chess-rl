@@ -103,21 +103,18 @@ class MLP(torch.nn.Module):
 
     def forward(self, observation: torch.Tensor) -> torch.Tensor:
         """Basic forward pass."""
-        observation = observation.to(self.device)
+        observation = observation.float().to(self.device)
         logger.trace(f"observation ({observation.device}|{self.device}): {observation.size()}")
         if self._size is None:
             self._size = observation.size()
         if self.flatten:
             start_dim = self.flatten_start_dim
-            if len(self._size) == observation.dim():
+            if observation.dim() > len(self._size):
                 start_dim += 1
             observation = observation.flatten(start_dim)
             logger.trace(f"observation ({observation.device}|{self.device}): {observation.size()}")
-        output_tensor: torch.Tensor = self.model(observation.float())
+        output_tensor: torch.Tensor = self.model(observation)
         return output_tensor
-
-    # def __call__(self, *args: ty.Any, **kwargs: ty.Any) -> ty.Any:
-    #     return super().__call__(*args, **kwargs)
 
     @property
     def device(self) -> torch.device:
