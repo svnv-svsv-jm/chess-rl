@@ -19,6 +19,8 @@ from matplotlib import pyplot as plt
 
 from shark.utils import board_to_tensor, move_action_space, action_one_hot_to_uci, action_to_one_hot
 
+WORST_REWARD = -1e6
+
 
 class ChessEnv(EnvBase):
     """Chess environment."""
@@ -32,6 +34,8 @@ class ChessEnv(EnvBase):
         play_vs_engine: bool = True,
         mate_amplifier: float = 100,
         softmax: bool = True,
+        worst_reward: float = WORST_REWARD,
+        illegal_amplifier: float = 1000,
     ) -> None:
         """_summary_
 
@@ -45,6 +49,8 @@ class ChessEnv(EnvBase):
         """
         super().__init__()  # call the constructor of the base class
         # Chess
+        self.illegal_amplifier = illegal_amplifier
+        self.worst_reward = worst_reward
         self.softmax = softmax
         self.engine_path = engine_path
         self.time = time
@@ -146,7 +152,7 @@ class ChessEnv(EnvBase):
         action: Tensor = tensordict["action"]
         action = action.float()
         device = action.device
-        logger.trace(f"Action ({action.size()}:{device}): {action.max()}")
+        logger.trace(f"Action ({action.size()}:{device}): max={action.max()} mean={action.mean()}")
         # Softmax to have all positives
         if self.softmax:
             action = action.softmax(-1)
@@ -159,13 +165,24 @@ class ChessEnv(EnvBase):
                 mask[i] = 1
         if mask.dim() < action.dim():
             mask = mask.unsqueeze(0)
-        action = (action * mask).float()
+        action = action * mask
         # Get action and its UCI
         # Action is a probability distribution over the action space
-        logger.trace(f"Action ({action.size()}:{device}): {action.max()}")
+        logger.trace(f"Action ({action.size()}:{device}): max={action.max()} mean={action.mean()}")
         uci = action_one_hot_to_uci(action)
-        logger.trace(f"Move: {uci}")
-        assert self.board.is_legal(chess.Move.from_uci(uci)), f"Illegal move: {uci}"
+
+        is_legal = self.board.is_legal(chess.Move.from_uci(uci))
+        if not is_legal:
+            reward = torch.Tensor([self.worst_reward * self.illegal_amplifier]).float()
+            return TensorDict(
+                {
+                    "observation": self.state.to(device),
+                    "reward": reward.to(device),
+                    "done": True,
+                },
+                batch_size=torch.Size(),
+            )
+        assert is_legal, f"Illegal move: {uci}"
 
         with SimpleEngine.popen_uci(self.engine_path) as engine:
             # Move
@@ -240,7 +257,7 @@ class ChessEnv(EnvBase):
         r: ty.Optional[ty.Union[float, int]]
         r = (s).score()
         if r is None:
-            r = -1e6
+            r = self.worst_reward
             # raise ValueError(f"Score: {s}")
         if self.board.is_checkmate():
             r = r * self.mate_amplifier

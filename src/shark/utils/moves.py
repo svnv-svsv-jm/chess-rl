@@ -74,8 +74,9 @@ def action_one_hot_to_uci(action_one_hot: torch.Tensor) -> str:
     ), f"Action space has size {action_space.size()}, but the input action vector has size {action_one_hot.size()}"
     idx = action_one_hot.view(-1).argmax()
     moves = list(action_dict.keys())
-    logger.trace(f"Getting move from index {idx} out of {len(moves)} moves")
-    return moves[idx]
+    uci = moves[idx]
+    logger.trace(f"Getting move from index {idx} out of {len(moves)} moves: {uci}")
+    return uci
 
 
 def action_to_one_hot(move: str, chess_board: chess.Board) -> torch.Tensor:
