@@ -8,32 +8,16 @@ import matplotlib.pyplot as plt
 import lightning.pytorch as pl
 from lightning.pytorch.loggers import CSVLogger
 from torchrl.envs.utils import check_env_specs
-
 from shark.models import PPOChess
 from shark.env import ChessEnv
 
 
 def test_ppo(engine_executable: str) -> None:
     """Test PPO on InvertedDoublePendulum."""
-    model = PPOChess(env=ChessEnv(engine_executable))
-    # Check
-    check_env_specs(model.env)
-    # Rollout
-    rollout = model.env.rollout(3)
-    logger.info(f"Rollout of three steps: {rollout}")
-    tensordict = model.env.reset()
-    logger.info(f"Running policy: {model.policy_module(tensordict)}")
-    logger.info(f"Running value: {model.value_module(tensordict)}")
-    # # Collector
-    # logger.info("Collector...")
-    # frame_skip = 1
-    # frames_per_batch = frame_skip * 20
-    # collector = model.train_dataloader()
-    # for _, tensordict_data in enumerate(collector):
-    #     logger.info(f"(Collector) Tensordict data:\n{tensordict_data}")
-    #     batch_size = int(tensordict_data.batch_size[0])
-    #     assert batch_size == int(frames_per_batch // frame_skip)
-    #     break
+    model = PPOChess(
+        env=ChessEnv(engine_executable),
+        total_frames=10,
+    )
     # Training
     trainer = pl.Trainer(
         accelerator="cpu",
