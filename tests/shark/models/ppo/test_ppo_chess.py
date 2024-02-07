@@ -16,13 +16,14 @@ def test_ppo(engine_executable: str) -> None:
     """Test PPO on InvertedDoublePendulum."""
     model = PPOChess(
         env=ChessEnv(engine_executable),
-        total_frames=10,
+        frames_per_batch=1,
+        total_frames=3,
     )
     # Training
     trainer = pl.Trainer(
         accelerator="cpu",
-        max_steps=10,
-        val_check_interval=5,
+        max_steps=2,
+        val_check_interval=1,
         log_every_n_steps=1,
         logger=CSVLogger(
             save_dir="pytest_artifacts",

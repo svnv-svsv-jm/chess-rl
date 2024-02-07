@@ -22,7 +22,7 @@ from .const import (
 )
 
 
-def board_to_tensor(board: chess.Board) -> Tensor:
+def board_to_tensor(board: chess.Board, flatten: bool = True) -> Tensor:
     """Converts current board to a Tensor.
 
     Args:
@@ -62,5 +62,8 @@ def board_to_tensor(board: chess.Board) -> Tensor:
                 tensor[i, j, piece_dict[piece_type]] = 1
             else:
                 tensor[i, j, piece_dict[FREE_SQUARE]] = 1
+
+    if flatten:
+        tensor = tensor.flatten()
 
     return tensor
