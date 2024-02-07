@@ -7,9 +7,9 @@ import torch
 from tensordict import TensorDict
 from tensordict.nn import TensorDictModule
 from tensordict.nn.distributions import NormalParamExtractor
+from torchrl.modules import MLP
 
 from shark.utils import find_device
-from shark.nn import MLP
 from shark.env import ChessEnv
 from shark.datasets import CollectorDataset
 
@@ -18,13 +18,13 @@ def test_chess_env(engine_executable: str) -> None:
     """Test we can initialize the chess environment."""
     env = ChessEnv(engine_path=engine_executable, play_as="black")
     out_shape = env.action_spec.shape[-1]
-    actor_net = MLP(
-        out_features=2 * out_shape,
-        hidden_dims=[16] * 2,
-        tanh=True,
-        last_activation=NormalParamExtractor(),
-        flatten=True,
-        flatten_start_dim=0,
+    actor_net = torch.nn.Sequential(
+        MLP(
+            out_features=2 * out_shape,
+            depth=2,
+            num_cells=4,
+        ),
+        NormalParamExtractor(),
     )
     policy_module = TensorDictModule(
         actor_net,

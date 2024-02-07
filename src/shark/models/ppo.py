@@ -28,12 +28,11 @@ from torchrl.envs import (
 from torchrl.envs.libs.gym import GymEnv
 from torchrl.envs import EnvBase
 from torchrl.envs.utils import ExplorationType, set_exploration_type
-from torchrl.modules import ProbabilisticActor, TanhNormal, ValueOperator
+from torchrl.modules import ProbabilisticActor, TanhNormal, ValueOperator, MLP
 from torchrl.objectives import ClipPPOLoss
 from torchrl.objectives.value import GAE
 
 from shark.datasets import CollectorDataset
-from shark.nn import MLP
 from shark.utils import find_device
 
 
@@ -123,27 +122,25 @@ class PPO(pl.LightningModule):
         # Actor
         shape = self.env.observation_spec["observation"].shape
         assert isinstance(shape, torch.Size)
-        in_shape = list(shape)
-        logger.debug(f"MLP in_shape: {in_shape}")
-        out_shape = self.env.action_spec.shape[-1]
-        logger.debug(f"MLP out_shape: {out_shape}")
-        self.actor_net = MLP(
-            out_features=2 * out_shape,
-            hidden_dims=[num_cells] * n_mlp_layers,
-            tanh=True,
-            last_activation=NormalParamExtractor(),
-            flatten=flatten,
-            flatten_start_dim=flatten_start_dim,
-        ).to(device)
-        example_batch = torch.zeros(in_shape).to(device).unsqueeze(0)
-        out = self.actor_net(example_batch)  # pylint: disable=not-callable
-        logger.trace(out)
+        out_features = self.env.action_spec.shape[-1]
+        logger.debug(f"MLP out_shape: {out_features}")
+        self.actor_net = torch.nn.Sequential(
+            MLP(
+                out_features=2 * out_features,
+                depth=n_mlp_layers,
+                num_cells=num_cells,
+                dropout=True,
+            ),
+            NormalParamExtractor(),
+        )
         logger.debug(f"Initialized actor: {self.actor_net}")
         self.policy_module = TensorDictModule(
             self.actor_net,
             in_keys=self.in_keys,
             out_keys=["loc", "scale"],
         )
+        td = self.env.reset()
+        self.policy_module(td)
         self.policy_module = ProbabilisticActor(
             module=self.policy_module,
             spec=self.env.action_spec,
@@ -159,16 +156,17 @@ class PPO(pl.LightningModule):
         # Critic
         self.value_net = MLP(
             out_features=1,
-            hidden_dims=[num_cells] * n_mlp_layers,
-            tanh=True,
-            flatten=flatten,
-            flatten_start_dim=flatten_start_dim,
-        ).to(device)
+            depth=n_mlp_layers,
+            num_cells=num_cells,
+            dropout=True,
+        )
         logger.debug(f"Initialized critic: {self.value_net}")
         self.value_module = ValueOperator(
             module=self.value_net,
             in_keys=self.in_keys,
         )
+        td = self.env.reset()
+        self.value_module(td)
         # Loss
         self.advantage_module = GAE(
             gamma=gamma,

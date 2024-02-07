@@ -10,9 +10,9 @@ from torch.utils.data import DataLoader
 from torch.optim import Optimizer, Adam
 from torch import Tensor
 from torch import nn
+from torchrl.modules import MLP
 
 from shark.buffers import ReplayBuffer
-from shark.nn import MLP
 from shark.agents import Agent
 from shark.datasets import ReplayBufferDataset
 
@@ -73,8 +73,8 @@ class DQN(pl.LightningModule):
         self.obs_size = int(self.env.observation_space.shape[0])  # type: ignore
         self.n_actions = int(self.env.action_space.n)  # type: ignore
 
-        self.net = MLP(self.n_actions, hidden_dims=hidden_dims, normalize=False)
-        self.target_net = MLP(self.n_actions, hidden_dims=hidden_dims)
+        self.net = MLP(out_features=self.n_actions, num_cells=hidden_dims)
+        self.target_net = MLP(out_features=self.n_actions, num_cells=hidden_dims)
 
         self.buffer = ReplayBuffer(replay_size)
         self.agent = Agent(self.env, self.buffer)
