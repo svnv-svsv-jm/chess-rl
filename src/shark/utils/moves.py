@@ -68,9 +68,14 @@ def action_one_hot_to_uci(action_one_hot: torch.Tensor) -> str:
         str:
             Move UCI.
     """
-    _, action_dict = move_action_space()
-    idx = action_one_hot.argmax()
-    return list(action_dict.keys())[idx]
+    action_space, action_dict = move_action_space()
+    assert (
+        action_space.numel() == action_one_hot.numel()
+    ), f"Action space has size {action_space.size()}, but the input action vector has size {action_one_hot.size()}"
+    idx = action_one_hot.view(-1).argmax()
+    moves = list(action_dict.keys())
+    logger.trace(f"Getting move from index {idx} out of {len(moves)} moves")
+    return moves[idx]
 
 
 def action_to_one_hot(move: str, chess_board: chess.Board) -> torch.Tensor:
@@ -133,6 +138,8 @@ def move_action_space() -> ty.Tuple[torch.Tensor, ty.Dict[str, int]]:
     all_moves: ty.List[str] = []
     for from_square in chess.SQUARES:
         for to_square in chess.SQUARES:
+            if from_square == to_square:
+                continue  # Can't go from square to same square...
             move_ = chess.Move(from_square, to_square)
             m: str = move_.uci()
             all_moves.append(m)

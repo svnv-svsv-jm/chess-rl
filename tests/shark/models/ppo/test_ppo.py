@@ -16,7 +16,7 @@ def test_ppo() -> None:
     frame_skip = 1
     frames_per_batch = frame_skip * 100
     model = PPO(
-        env_name="InvertedDoublePendulum-v4",
+        env="InvertedDoublePendulum-v4",
         frame_skip=frame_skip,
         frames_per_batch=frames_per_batch,
         n_mlp_layers=7,
@@ -25,6 +25,7 @@ def test_ppo() -> None:
     rollout = model.env.rollout(3)
     logger.info(f"Rollout of three steps: {rollout}")
     logger.info(f"Shape of the rollout TensorDict: {rollout.batch_size}")
+    logger.info(f"Env reset: {model.env.reset()}")
     logger.info(f"Running policy: {model.policy_module(model.env.reset())}")
     logger.info(f"Running value: {model.value_module(model.env.reset())}")
     # Collector
@@ -75,5 +76,5 @@ def test_ppo() -> None:
 
 if __name__ == "__main__":
     logger.remove()
-    logger.add(sys.stderr, level="TRACE")
+    logger.add(sys.stderr, level="DEBUG")
     pytest.main([__file__, "-x", "-s", "--pylint"])

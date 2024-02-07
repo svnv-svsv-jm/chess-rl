@@ -1,4 +1,4 @@
-__all__ = ["PPO"]
+__all__ = ["PPO", "PPOChess"]
 
 from loguru import logger
 import typing as ty
@@ -8,7 +8,8 @@ from lightning.fabric.utilities.types import LRScheduler
 from lightning.pytorch.utilities.types import OptimizerLRSchedulerConfig, LRSchedulerConfigType
 from lightning.pytorch.core.optimizer import LightningOptimizer
 import torch
-from torch import nn, Tensor
+from torch import Tensor
+from torch.utils.data import DataLoader
 from tensordict import TensorDict
 from tensordict.nn import TensorDictModule
 from tensordict.nn.distributions import NormalParamExtractor
@@ -22,9 +23,11 @@ from torchrl.envs import (
     ObservationNorm,
     StepCounter,
     TransformedEnv,
+    FlattenObservation,
 )
 from torchrl.envs.libs.gym import GymEnv
-from torchrl.envs.utils import check_env_specs, ExplorationType, set_exploration_type
+from torchrl.envs import EnvBase
+from torchrl.envs.utils import ExplorationType, set_exploration_type
 from torchrl.modules import ProbabilisticActor, TanhNormal, ValueOperator
 from torchrl.objectives import ClipPPOLoss
 from torchrl.objectives.value import GAE
@@ -38,7 +41,7 @@ class PPO(pl.LightningModule):
 
     def __init__(
         self,
-        env_name: str = "InvertedDoublePendulum-v4",
+        env: ty.Union[str, EnvBase] = "InvertedDoublePendulum-v4",
         num_cells: int = 256,
         lr: float = 3e-4,
         max_grad_norm: float = 1.0,
@@ -61,7 +64,7 @@ class PPO(pl.LightningModule):
     ) -> None:
         """
         Args:
-            env_name (str, optional): _description_. Defaults to "InvertedDoublePendulum-v4".
+            env (str, optional): _description_. Defaults to "InvertedDoublePendulum-v4".
             num_cells (int, optional): _description_. Defaults to 256.
             lr (float, optional): _description_. Defaults to 3e-4.
             max_grad_norm (float, optional): _description_. Defaults to 1.0.
@@ -79,7 +82,7 @@ class PPO(pl.LightningModule):
             n_mlp_layers (int, optional): _description_. Defaults to 3.
         """
         super().__init__()
-        self.save_hyperparameters()
+        self.save_hyperparameters(ignore=["env"])
         self.max_grad_norm = max_grad_norm
         self.num_cells = num_cells
         self.lr = lr
@@ -96,37 +99,41 @@ class PPO(pl.LightningModule):
         self.in_keys = in_keys
         device = find_device(accelerator)
         # Environment
-        self.base_env = GymEnv(
-            env_name,
-            device=device,
-            frame_skip=frame_skip,
-        )
+        if isinstance(env, str):
+            self.base_env = GymEnv(
+                env,
+                device=device,
+                frame_skip=frame_skip,
+            )
+        else:
+            self.base_env = env
         # Env transformations
-        obs_norm = ObservationNorm(in_keys=self.in_keys)
-        self.env = TransformedEnv(
-            self.base_env,
-            Compose(
-                obs_norm,
-                DoubleToFloat(in_keys=self.in_keys),
-                StepCounter(),
-            ),
-        )
-        obs_norm.init_stats(num_iter=1000, reduce_dim=0, cat_dim=0)
+        self.env = self.transformed_env(self.base_env)
         # Sanity check
-        logger.debug(f"normalization constant shape: {self.env.transform[0].loc.shape}")
         logger.debug(f"observation_spec: {self.env.observation_spec}")
         logger.debug(f"reward_spec: {self.env.reward_spec}")
         logger.debug(f"done_spec: {self.env.done_spec}")
         logger.debug(f"action_spec: {self.env.action_spec}")
         logger.debug(f"state_spec: {self.env.state_spec}")
-        check_env_specs(self.env)
         # Actor
+        shape = self.env.observation_spec["observation"].shape
+        assert isinstance(shape, torch.Size)
+        in_shape = list(shape)
+        logger.debug(f"MLP in_shape: {in_shape}")
+        out_shape = self.env.action_spec.shape[-1]
+        logger.debug(f"MLP out_shape: {out_shape}")
         self.actor_net = MLP(
-            out_features=2 * self.env.action_spec.shape[-1],
+            out_features=2 * out_shape,
             hidden_dims=[num_cells] * n_mlp_layers,
             tanh=True,
             last_activation=NormalParamExtractor(),
+            flatten=True,
+            flatten_start_dim=0,
         ).to(device)
+        example_batch = torch.zeros(in_shape).to(device).unsqueeze(0)
+        out = self.actor_net(example_batch)  # pylint: disable=not-callable
+        logger.trace(out)
+        logger.debug(f"Initialized actor: {self.actor_net}")
         self.policy_module = TensorDictModule(
             self.actor_net,
             in_keys=self.in_keys,
@@ -143,12 +150,16 @@ class PPO(pl.LightningModule):
             },
             return_log_prob=True,  # we'll need the log-prob for the numerator of the importance weights
         )
+        logger.debug(f"Initialized policy: {self.policy_module}")
         # Critic
         self.value_net = MLP(
             out_features=1,
             hidden_dims=[num_cells] * n_mlp_layers,
             tanh=True,
+            flatten=True,
+            flatten_start_dim=0,
         ).to(device)
+        logger.debug(f"Initialized critic: {self.value_net}")
         self.value_module = ValueOperator(
             module=self.value_net,
             in_keys=self.in_keys,
@@ -197,7 +208,17 @@ class PPO(pl.LightningModule):
         )
         return collector
 
-    def train_dataloader(self) -> SyncDataCollector:
+    # def prepare_data(self) -> None:
+    #     """Set up collector."""
+    #     collector = self.get_collector()
+    #     for i, tensordict_data in enumerate(collector):
+    #         pass
+
+    # def setup(self, stage: str) -> None:
+    #     """Set up collector."""
+    #     collector = self.get_collector()
+
+    def train_dataloader(self) -> DataLoader:
         """Create DataLoader for training."""
         collector = self.get_collector()
         return collector
@@ -220,26 +241,10 @@ class PPO(pl.LightningModule):
 
     def training_step(self, batch: TensorDict, batch_idx: int) -> Tensor:
         """Implementation follows the PyTorch tutorial: https://pytorch.org/tutorials/beginner/dcgan_faces_tutorial.html"""
-        optimizer = self.optimizers()
-        assert isinstance(optimizer, (torch.optim.Optimizer, LightningOptimizer))
         # Run optimization step
         loss = self.step(batch, batch_idx=batch_idx, tag="train")
-        # Zero grad before accumulating them
-        optimizer.zero_grad()
-        # Run backward
-        logger.trace("Running manual_backward()")
-        self.manual_backward(loss)
-        # Clip gradients if necessary
-        clip_val = self.trainer.gradient_clip_val
-        if clip_val is None:
-            clip_val = self.max_grad_norm
-        logger.trace(f"Clipping gradients to {clip_val}")
-        torch.nn.utils.clip_grad_norm_(self.loss_module.parameters(), clip_val)
-        # Optimizer
-        logger.trace("Running optimizer.step()")
-        optimizer.step()
-        # Call schedulers
-        self.call_scheduler()
+        # This will run only if manual optimization
+        self.manual_optimization_step(loss)
         # We evaluate the policy once every `sefl.trainer.val_check_interval` batches of data
         n = self.trainer.val_check_interval
         if n is None:
@@ -248,6 +253,40 @@ class PPO(pl.LightningModule):
         if batch_idx % n == 0:
             self.rollout()
         return loss
+
+    def manual_optimization_step(self, loss: Tensor) -> None:
+        """Steps to run if manual optimization is enabled."""
+        if not self.automatic_optimization:
+            logger.trace("Automatic optimization is enabled, skipping manual optimization step.")
+            return
+        # Get optimizers
+        optimizer = self.optimizers()
+        assert isinstance(optimizer, (torch.optim.Optimizer, LightningOptimizer))
+        # Zero grad before accumulating them
+        optimizer.zero_grad()
+        # Run backward
+        logger.trace("Running manual_backward()")
+        self.manual_backward(loss)
+        # Clip gradients if necessary
+        self.clip_gradients()
+        # Optimizer
+        logger.trace("Running optimizer.step()")
+        optimizer.step()
+        # Call schedulers
+        self.call_scheduler()
+
+    def clip_gradients(
+        self,
+        optimizer: torch.optim.Optimizer = None,
+        gradient_clip_val: ty.Union[int, float] = None,
+        gradient_clip_algorithm: str = None,
+    ) -> None:
+        """Clip gradients if necessary. This is an official hook."""
+        clip_val = self.trainer.gradient_clip_val
+        if clip_val is None:
+            clip_val = self.max_grad_norm
+        logger.trace(f"Clipping gradients to {clip_val}")
+        torch.nn.utils.clip_grad_norm_(self.loss_module.parameters(), clip_val)
 
     def call_scheduler(self) -> None:
         """Call schedulers. We are using an infinite datalaoder, this will never be called by the `pl.Trainer` in the `on_train_epoch_end` hook. We have to call it manually in the `training_step`."""
@@ -283,13 +322,6 @@ class PPO(pl.LightningModule):
             loss_entropy: Tensor = loss_vals["loss_entropy"]
             loss_value = loss_objective + loss_critic + loss_entropy
             loss += loss_value
-            # # Optimization: backward, grad clipping and optim step
-            # loss_value.backward()
-            # # this is not strictly mandatory but it's good practice to keep
-            # # your gradient norm bounded
-            # torch.nn.utils.clip_grad_norm_(self.loss_module.parameters(), self.trainer.gradient_clip_val)
-            # optim.step()
-            # optim.zero_grad()
         self.log(f"loss/{tag}", loss, prog_bar=True)
         reward: Tensor = tensordict_data["next", "reward"]
         self.log(f"reward/{tag}", reward.mean().item(), prog_bar=True)
@@ -312,3 +344,38 @@ class PPO(pl.LightningModule):
             step_count = eval_rollout["step_count"]
             self.log(f"step_count/{tag}", step_count.max().item())
             del eval_rollout
+
+    def transformed_env(self, base_env: EnvBase) -> EnvBase:
+        """Setup transformed environment."""
+        obs_norm = ObservationNorm(in_keys=self.in_keys)
+        env = TransformedEnv(
+            base_env,
+            transform=Compose(
+                obs_norm,
+                DoubleToFloat(in_keys=self.in_keys),
+                StepCounter(),
+            ),
+        )
+        obs_norm.init_stats(num_iter=1000, reduce_dim=0, cat_dim=0)
+        logger.debug(f"normalization constant shape: {env.transform[0].loc.shape}")
+        return env
+
+
+class PPOChess(PPO):
+    """Same but overrides the `transformed_env` method."""
+
+    def transformed_env(self, base_env: EnvBase) -> EnvBase:
+        """Setup transformed environment."""
+        env = TransformedEnv(
+            base_env,
+            transform=Compose(
+                StepCounter(),
+                # FlattenObservation(
+                #     first_dim=1,
+                #     last_dim=-1,
+                #     in_keys=self.in_keys,
+                #     allow_positive_dim=True,
+                # ),
+            ),
+        )
+        return env

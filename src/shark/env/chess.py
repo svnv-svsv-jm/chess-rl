@@ -31,9 +31,21 @@ class ChessEnv(EnvBase):
         play_as: str = "white",
         play_vs_engine: bool = True,
         mate_amplifier: float = 100,
+        softmax: bool = True,
     ) -> None:
+        """_summary_
+
+        Args:
+            engine_path (str): _description_
+            time (float, optional): _description_. Defaults to 5.
+            depth (int, optional): _description_. Defaults to 20.
+            play_as (str, optional): _description_. Defaults to "white".
+            play_vs_engine (bool, optional): _description_. Defaults to True.
+            mate_amplifier (float, optional): _description_. Defaults to 100.
+        """
         super().__init__()  # call the constructor of the base class
         # Chess
+        self.softmax = softmax
         self.engine_path = engine_path
         self.time = time
         self.depth = depth
@@ -46,7 +58,7 @@ class ChessEnv(EnvBase):
         self.board = chess.Board()
         self.state = board_to_tensor(self.board)
         self.action_space, self.action_map = move_action_space()
-        self.dtype = torch.int8
+        self.dtype = torch.float32
 
         # action_spec, observation_spec and reward_spec are fields that define the range and shape of our actions, observations and rewards. They tell other modules in the library what to expect from the environment. They are some type of TensorSpec depending on whether they're bounded or not, discrete or continuous. observation_spec is a bit of an outlier - it has to be of type CompositeSpec.
 
@@ -99,19 +111,27 @@ class ChessEnv(EnvBase):
         Returns:
             TensorDict: _description_
         """
-        # init new state and pack it up in a tensordict
-        out_tensordict = TensorDict({}, batch_size=torch.Size())
+        logger.trace(tensordict)
+        if tensordict is not None:
+            shape = tensordict.shape
+        else:
+            shape = torch.Size()
 
         self.board = chess.Board()
-        self.state = board_to_tensor(self.board).to(self.device).to(self.dtype)
-        out_tensordict.set("observation", self.state)
 
+        # If playing as BLACK, let opponent move before we return the reset state
         if not self.is_white:
             with SimpleEngine.popen_uci(self.engine_path) as engine:
                 # Opponent's move
                 self._opponent_move(engine)
 
-        return out_tensordict
+        # init new state and pack it up in a tensordict
+        self.state = board_to_tensor(self.board).to(self.device).to(self.dtype)
+        logger.trace(f"State reset: {self.state.size()}")
+        return TensorDict(
+            {"observation": self.state},
+            batch_size=shape,
+        )
 
     def _step(self, tensordict: TensorDict) -> TensorDict:
         """The `_step()` method takes in a `TensorDict` from which it reads an action, applies the action and returns a new `TensorDict` containing the observation, reward and done signal for that timestep.
@@ -122,11 +142,29 @@ class ChessEnv(EnvBase):
         Returns:
             TensorDict: _description_
         """
-        # Get action and call the board
+        # Read action from input
         action: Tensor = tensordict["action"]
+        action = action.float()
+        logger.trace(f"Action ({action.size()}): action")
+        # Softmax to have all positives
+        if self.softmax:
+            action = action.softmax(-1)
+        # Remove illegal moves
+        mask = torch.zeros(self.action_space.size(), device=self.device).view(-1)
+        _, act_dict = move_action_space()
+        for uci, i in act_dict.items():
+            move = chess.Move.from_uci(uci)
+            if self.board.is_legal(move):
+                mask[i] = 1
+        if mask.dim() < action.dim():
+            mask = mask.unsqueeze(0)
+        action = (action * mask).float()
+        # Get action and its UCI
+        # Action is a probability distribution over the action space
+        logger.trace(f"Action: {action}")
         uci = action_one_hot_to_uci(action)
         logger.trace(f"Move: {uci}")
-        # assert self.board.is_legal(chess.Move.from_uci(uci)), f"Illegal move: {uci}"
+        assert self.board.is_legal(chess.Move.from_uci(uci)), f"Illegal move: {uci}"
 
         with SimpleEngine.popen_uci(self.engine_path) as engine:
             # Move
@@ -193,19 +231,24 @@ class ChessEnv(EnvBase):
         )
 
     def _engine_eval(self, engine: SimpleEngine) -> float:
+        """Let engine evaluate the position."""
+        logger.trace(f"Evaluating position with {self.engine_path}")
         info = engine.analyse(self.board, chess.engine.Limit(time=self.time, depth=self.depth))
         score: PovScore = info["score"]
         s = score.white() if self.is_white else score.black()
         r: ty.Optional[ty.Union[float, int]]
         r = (s).score()
         if r is None:
-            raise ValueError(f"Score: {s}")
+            r = -1e6
+            # raise ValueError(f"Score: {s}")
         if self.board.is_checkmate():
             r = r * self.mate_amplifier
         logger.trace(f"Score: {r}")
         return r
 
     def _engine_move(self, engine: SimpleEngine) -> None:
+        """Get opponent's move from engine."""
+        logger.trace(f"Getting move from {self.engine_path}")
         result = engine.play(
             self.board,
             chess.engine.Limit(time=self.time, depth=self.depth),

@@ -55,6 +55,9 @@ class MLP(torch.nn.Module):
         out_features: ty.Union[int, ty.Sequence[int]],
         hidden_dims: ty.Sequence[int] = None,
         last_activation: torch.nn.Module = None,
+        flatten: bool = True,
+        flatten_start_dim: int = 0,
+        expected_input_size: torch.Size = None,
         **kwargs: ty.Any,
     ) -> None:
         """General MLP.
@@ -69,6 +72,8 @@ class MLP(torch.nn.Module):
                 See function :func:`~brainiac_2.nn.block`
         """
         super().__init__()
+        self.flatten = flatten
+        self.flatten_start_dim = flatten_start_dim
         # Sanitize
         if hidden_dims is None:
             hidden_dims = []
@@ -85,17 +90,30 @@ class MLP(torch.nn.Module):
         out_shape = [out_features] if isinstance(out_features, int) else out_features
         layers = []
         if len(hidden_dims) > 0:
-            for i in range(0, len(hidden_dims)):
-                layers += block(hidden_dims[i], **kwargs)
+            for _, h in enumerate(hidden_dims):
+                layers += block(h, **kwargs)
             layers.append(torch.nn.LazyLinear(int(np.prod(out_shape))))
         else:
             layers.append(torch.nn.LazyLinear(int(np.prod(out_shape))))
         if last_activation is not None:
             layers.append(last_activation)
         self.model = torch.nn.Sequential(*layers)
+        # Private
+        self._size = expected_input_size
 
     def forward(self, observation: torch.Tensor) -> torch.Tensor:
         """Basic forward pass."""
         logger.trace(f"observation: {observation.size()}")
-        output_tensor: torch.Tensor = self.model(observation)
+        if self._size is None:
+            self._size = observation.size()
+        if self.flatten:
+            start_dim = self.flatte_start_dim
+            if len(self._size) == observation.dim():
+                start_dim += 1
+            observation = observation.flatten(start_dim)
+            logger.trace(f"observation: {observation.size()}")
+        output_tensor: torch.Tensor = self.model(observation.float())
         return output_tensor
+
+    # def __call__(self, *args: ty.Any, **kwargs: ty.Any) -> ty.Any:
+    #     return super().__call__(*args, **kwargs)

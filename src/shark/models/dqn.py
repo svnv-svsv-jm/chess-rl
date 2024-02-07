@@ -87,9 +87,8 @@ class DQN(pl.LightningModule):
         self.populate(warm_start_steps)
 
     def populate(self, steps: int = 1000) -> None:
-        """
-        Carries out several random steps through the environment to initially fill
-        up the replay buffer with experiences
+        """Carries out several random steps through the environment to initially fill up the replay buffer with experiences
+
         Args:
             steps: number of random steps to populate the buffer with
         """
@@ -100,10 +99,11 @@ class DQN(pl.LightningModule):
         self,
         x: Tensor,
     ) -> Tensor:
-        """
-        Passes in a state x through the network and gets the q_values of each action as an output
+        """Passes in a state x through the network and gets the q_values of each action as an output
+
         Args:
             x: environment state.
+
         Returns:
             q values
         """
@@ -112,9 +112,11 @@ class DQN(pl.LightningModule):
 
     def dqn_mse_loss(self, batch: ty.Tuple[Tensor, Tensor, Tensor, Tensor, Tensor]) -> Tensor:
         """Calculates the MSE loss using a mini batch from the replay buffer.
+
         Args:
             batch (`Sequence[Tensor]`):
                 Current batch of replay data.
+
         Returns:
             Tensor:
                 Loss value.
@@ -140,11 +142,13 @@ class DQN(pl.LightningModule):
         batch_idx: int,
     ) -> Tensor:
         """Carries out a single step through the environment to update the replay buffer. Then calculates loss based on the mini-batch recieved.
+
         Args:
             batch (ty.Tuple[Tensor, Tensor, Tensor, Tensor, Tensor]):
                 Current mini batch of replay data
             batch_idx (int):
                 Batch number.
+
         Returns:
             Training loss.
         """
@@ -191,7 +195,7 @@ class DQN(pl.LightningModule):
         return [optimizer]
 
     def train_dataloader(self) -> DataLoader:
-        """Initialize the Replay Buffer dataset used for retrieving experiences"""
+        """Initialize the Replay Buffer dataset used for retrieving experiences."""
         episode_length: int = self.hparams["episode_length"]
         batch_size: int = self.hparams["batch_size"]
         dataset = ReplayBufferDataset(self.buffer, episode_length)
