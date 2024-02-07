@@ -29,7 +29,7 @@ jupyterlab = "*"
 python-chess = "^1.999"
 lightning = "^2.1.3"
 pydantic = "^2.6.0"
-gymnasium = {extras = ["mujoco"], version = "^0.29.1"}
+gymnasium = { extras = ["mujoco"], version = "^0.29.1" }
 pygame = "^2.5.2"
 torchrl = "^0.2.1"
 matplotlib = "^3.8.2"

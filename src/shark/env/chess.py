@@ -111,7 +111,7 @@ class ChessEnv(EnvBase):
         Returns:
             TensorDict: _description_
         """
-        logger.trace(tensordict)
+        logger.debug("Resetting environment.")
         if tensordict is not None:
             shape = tensordict.shape
         else:
@@ -126,7 +126,7 @@ class ChessEnv(EnvBase):
                 self._opponent_move(engine)
 
         # init new state and pack it up in a tensordict
-        self.state = board_to_tensor(self.board).to(self.device).to(self.dtype)
+        self.state = board_to_tensor(self.board).to(self.dtype)
         logger.trace(f"State reset: {self.state.size()}")
         return TensorDict(
             {"observation": self.state},
@@ -145,12 +145,13 @@ class ChessEnv(EnvBase):
         # Read action from input
         action: Tensor = tensordict["action"]
         action = action.float()
-        logger.trace(f"Action ({action.size()}): action")
+        device = action.device
+        logger.trace(f"Action ({action.size()}:{device}): action")
         # Softmax to have all positives
         if self.softmax:
             action = action.softmax(-1)
         # Remove illegal moves
-        mask = torch.zeros(self.action_space.size(), device=self.device).view(-1)
+        mask = torch.zeros(self.action_space.size(), device=device).view(-1)
         _, act_dict = move_action_space()
         for uci, i in act_dict.items():
             move = chess.Move.from_uci(uci)
@@ -186,8 +187,8 @@ class ChessEnv(EnvBase):
 
         return TensorDict(
             {
-                "observation": self.state.to(self.device),
-                "reward": reward.to(self.device),
+                "observation": self.state.to(device),
+                "reward": reward.to(device),
                 "done": done,
             },
             batch_size=torch.Size(),

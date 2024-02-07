@@ -25,7 +25,7 @@ class ReplayBufferDataset(IterableDataset):
         self.sample_size = sample_size
 
     def __getitem__(self, i: int) -> ty.Any:
-        raise NotImplementedError("ReplayBufferDataset is not indexable.")
+        raise NotImplementedError(f"{self.__class__.__name__} is not indexable.")
 
     def __iter__(self) -> ty.Iterator[ty.Tuple]:
         """Sample from `ReplayBuffer` and yield experiences."""
