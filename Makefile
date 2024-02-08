@@ -28,6 +28,15 @@ SYSTEM=$(shell python -c "import sys; print(sys.platform)")
 # poetry
 PYTHON_KEYRING_BACKEND=keyring.backends.null.Keyring
 POETRY=poetry
+# docker
+DOCKER?=docker
+DOCKERFILE?=Dockerfile
+MEMORY=8g
+SHM=4g
+CPUS=1
+DOCKER_COMMON_FLAGS=--cpus=$(CPUS) --memory=$(MEMORY) --shm-size=$(SHM) --network=host --volume $(PWD):/workdir -e LOCAL_USER_ID -e LOCAL_USER
+IMAGE=$(PROJECT_NAME)
+IMAGE_PYTHON=/venv/bin/python
 
 
 # -----------
@@ -69,3 +78,19 @@ git-squash:
 	git reset $(git merge-base main $(git branch --show-current))
 	git add -A
 	git commit -m "squashed commit"
+
+
+# -----------
+# docker
+# -----------
+# linux/arm64/v8,linux/amd64
+build:
+	$(DOCKER) buildx build --platform linux/amd64 -t $(IMAGE) --build-arg PROJECT_NAME=$(PROJECT_NAME) -f $(DOCKERFILE) .
+
+up: docker-compose.yml
+	@echo "DOCKER_BUILDKIT=${DOCKER_BUILDKIT}"
+	@echo "COMPOSE_DOCKER_CLI_BUILD=${COMPOSE_DOCKER_CLI_BUILD}"
+	docker-compose -p $(PROJECT_NAME) up -d --build --force-recreate
+
+down: docker-compose.yml
+	$(DOCKER)-compose -p $(PROJECT_NAME) down --volumes

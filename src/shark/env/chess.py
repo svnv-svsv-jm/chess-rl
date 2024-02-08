@@ -149,28 +149,20 @@ class ChessEnv(EnvBase):
             TensorDict: _description_
         """
         # Read action from input
-        action: Tensor = tensordict["action"]
-        action = action.float()
+        action_: Tensor = tensordict["action"]
+        action = action_.float()
         device = action.device
         logger.trace(f"Action ({action.size()}:{device}): max={action.max()} mean={action.mean()}")
         # Softmax to have all positives
         if self.softmax:
             action = action.softmax(-1)
         # Remove illegal moves
-        mask = torch.zeros(self.action_space.size(), device=device).view(-1)
-        _, act_dict = move_action_space()
-        for uci, i in act_dict.items():
-            move = chess.Move.from_uci(uci)
-            if self.board.is_legal(move):
-                mask[i] = 1
-        if mask.dim() < action.dim():
-            mask = mask.unsqueeze(0)
-        action = action * mask
+        action = self.remove_illegal_move(action, device=device)
         # Get action and its UCI
         # Action is a probability distribution over the action space
         logger.trace(f"Action ({action.size()}:{device}): max={action.max()} mean={action.mean()}")
         uci = action_one_hot_to_uci(action)
-
+        # Check if legal
         is_legal = self.board.is_legal(chess.Move.from_uci(uci))
         if not is_legal:
             reward = torch.Tensor([self.worst_reward * self.illegal_amplifier]).float()
@@ -204,6 +196,7 @@ class ChessEnv(EnvBase):
 
         return TensorDict(
             {
+                "action": action_,
                 "observation": self.state.to(device),
                 "reward": reward.to(device),
                 "done": done,
@@ -285,3 +278,16 @@ class ChessEnv(EnvBase):
                 self._engine_move(engine)
             else:
                 raise NotImplementedError("")
+
+    def remove_illegal_move(self, action: torch.Tensor, device: torch.device) -> torch.Tensor:
+        """Remove illegal moves from the actions."""
+        mask = torch.zeros(self.action_space.size(), device=device).view(-1)
+        _, act_dict = move_action_space()
+        for uci, i in act_dict.items():
+            move = chess.Move.from_uci(uci)
+            if self.board.is_legal(move):
+                mask[i] = 1
+        if mask.dim() < action.dim():
+            mask = mask.unsqueeze(0)
+        action = action * mask
+        return action

@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 import lightning.pytorch as pl
 from lightning.pytorch.loggers import CSVLogger
 from torchrl.envs.utils import check_env_specs
+
 from shark.models import PPOChess
 from shark.env import ChessEnv
 
