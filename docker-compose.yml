@@ -12,6 +12,7 @@ services:
       network: host
       platforms:
         - linux/amd64
+        # - linux/arm64/v8
     network_mode: host
     entrypoint: /workdir/scripts/entrypoint.sh
     command: tail -f /dev/null
@@ -19,6 +20,8 @@ services:
       - ./:/workdir
     environment:
       <<: *common-variables
+      COMPOSE_DOCKER_CLI_BUILD: 1
+      DOCKER_BUILDKIT: 1
 
   # dev-container:
   #   image: ${IMAGE}

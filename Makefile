@@ -46,6 +46,7 @@ IMAGE_PYTHON=/venv/bin/python
 install-init:
 	$(PYTHON_EXEC) pip install --upgrade pip
 	$(PYTHON_EXEC) pip install --upgrade poetry
+	$(PYTHON_EXEC) poetry self update
 
 install: install-init
 	$(PYTHON_EXEC) poetry install --no-cache
@@ -85,7 +86,7 @@ git-squash:
 # -----------
 # linux/arm64/v8,linux/amd64
 build:
-	$(DOCKER) buildx build --platform linux/amd64 -t $(IMAGE) --build-arg PROJECT_NAME=$(PROJECT_NAME) -f $(DOCKERFILE) .
+	$(DOCKER) buildx build --platform linux/amd64 --load -t $(IMAGE) --build-arg PROJECT_NAME=$(PROJECT_NAME) -f $(DOCKERFILE) .
 
 up: docker-compose.yml
 	@echo "DOCKER_BUILDKIT=${DOCKER_BUILDKIT}"
