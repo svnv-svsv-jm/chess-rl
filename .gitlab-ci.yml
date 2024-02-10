@@ -37,7 +37,8 @@ pytest-python:
 # -----------
 # Automatic
 # -----------
-update_main:
+# Automatically try to push to `main` branch
+update-main:
   stage: deploy
   only:
     - develop
@@ -51,7 +52,7 @@ update_main:
 # -----------
 # Build the wheel and pass the current package version to the release job
 # The wheel is pushed to Nexus only if we are on main/master
-prepare_release:
+prepare-release:
   image: python:3.10.10
   stage: deploy
   only:
@@ -84,14 +85,14 @@ prepare_release:
     reports:
       dotenv: variables.env
 
-# Creates a release, with the current package version from the prepare_release job
-release-job:
+# Creates a release, with the current package version from the prepare-release job
+release:
   image: registry.gitlab.com/gitlab-org/release-cli:latest
   stage: deploy
   dependencies:
-    - prepare_release
+    - prepare-release
   needs: # to get the package version
-    - job: prepare_release
+    - job: prepare-release
       artifacts: true
   only:
     - main # only execute the release if the pipeline runs for the main branch
