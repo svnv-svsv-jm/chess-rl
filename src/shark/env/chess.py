@@ -220,11 +220,15 @@ class ChessEnv(EnvBase):
             self.board.push_san(uci)
             # Get the evaluation from engine
             r = self._engine_eval(engine)
-            # Opponent's move
-            self._opponent_move(engine)
+            if self.board.is_checkmate():
+                logger.success(f"Game won!")
+                r = r * self.mate_amplifier
+            else:
+                # Opponent's move
+                self._opponent_move(engine)
         # Reward
         if self.board.is_checkmate():
-            logger.success(f"Game won!")
+            logger.debug(f"Game lost!")
             r = r * self.mate_amplifier
         logger.trace(f"Reward: {r}")
         reward = torch.Tensor([r]).to(self.reward_spec.dtype)

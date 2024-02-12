@@ -46,6 +46,7 @@ class BaseRL(pl.LightningModule):
         policy_module: TensorDictModule,
         value_module: TensorDictModule,
         advantage_module: TensorDictModule,
+        in_keys: ty.List[str],
         lr: float = 3e-4,
         max_grad_norm: float = 1.0,
         frame_skip: int = 1,
@@ -56,8 +57,6 @@ class BaseRL(pl.LightningModule):
         lr_monitor: str = "loss/train",
         lr_monitor_strict: bool = False,
         rollout_max_steps: int = 1000,
-        in_keys: ty.List[str] = ["observation"],
-        legacy: bool = False,
         automatic_optimization: bool = True,
     ) -> None:
         """_summary_
@@ -82,7 +81,15 @@ class BaseRL(pl.LightningModule):
             automatic_optimization (bool, optional): _description_. Defaults to True.
         """
         super().__init__()
-        self.save_hyperparameters(ignore=["env"])
+        self.save_hyperparameters(
+            ignore=[
+                "base_env",
+                "env",
+                "loss_module",
+                "policy_module",
+                "value_module",
+            ]
+        )
         self.max_grad_norm = max_grad_norm
         self.lr = lr
         self.frame_skip = frame_skip
@@ -113,7 +120,7 @@ class BaseRL(pl.LightningModule):
         self.loss_module = loss_module
         self.policy_module = policy_module
         self.value_module = value_module
-        self.value_module = value_module
+        self.advantage_module = advantage_module
         # Important: This property activates manual optimization
         self.automatic_optimization = automatic_optimization
         # Will exist only after training initialisation

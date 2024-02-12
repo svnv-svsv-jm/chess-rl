@@ -49,6 +49,7 @@ class PPO(BaseRL):
         entropy_eps: float = 1e-4,
         clip_epsilon: float = 0.2,
         n_mlp_layers: int = 3,
+        in_keys: ty.List[str] = ["observation"],
         **kwargs: ty.Any,
     ) -> None:
         """
@@ -78,34 +79,43 @@ class PPO(BaseRL):
             legacy (bool, optional): _description_. Defaults to False.
             automatic_optimization (bool, optional): _description_. Defaults to True.
         """
-        self.save_hyperparameters(ignore=["env"])
+        self.save_hyperparameters(
+            ignore=[
+                "base_env",
+                "env",
+                "loss_module",
+                "policy_module",
+                "value_module",
+            ]
+        )
         self.num_cells = num_cells
         self.gamma = gamma
         self.lmbda = lmbda
         self.entropy_eps = entropy_eps
+        self.in_keys = in_keys
         # Environment
         if isinstance(env, str):
-            self.base_env = GymEnv(
+            base_env = GymEnv(
                 env,
                 device=kwargs.get("device", None),
                 frame_skip=kwargs.get("frame_skip", None),
             )
         else:
-            self.base_env = env
+            base_env = env
         # Env transformations
-        self.env = self.transformed_env(self.base_env)
+        env = self.transformed_env(base_env)
         # Sanity check
-        logger.debug(f"observation_spec: {self.env.observation_spec}")
-        logger.debug(f"reward_spec: {self.env.reward_spec}")
-        logger.debug(f"done_spec: {self.env.done_spec}")
-        logger.debug(f"action_spec: {self.env.action_spec}")
-        logger.debug(f"state_spec: {self.env.state_spec}")
+        logger.debug(f"observation_spec: {env.observation_spec}")
+        logger.debug(f"reward_spec: {env.reward_spec}")
+        logger.debug(f"done_spec: {env.done_spec}")
+        logger.debug(f"action_spec: {env.action_spec}")
+        logger.debug(f"state_spec: {env.state_spec}")
         # Actor
-        shape = self.env.observation_spec["observation"].shape
+        shape = env.observation_spec["observation"].shape
         assert isinstance(shape, torch.Size)
-        out_features = self.env.action_spec.shape[-1]
+        out_features = env.action_spec.shape[-1]
         logger.debug(f"MLP out_shape: {out_features}")
-        self.actor_net = torch.nn.Sequential(
+        actor_net = torch.nn.Sequential(
             MLP(
                 out_features=2 * out_features,
                 depth=n_mlp_layers,
@@ -114,50 +124,50 @@ class PPO(BaseRL):
             ),
             NormalParamExtractor(),
         )
-        logger.debug(f"Initialized actor: {self.actor_net}")
+        logger.debug(f"Initialized actor: {actor_net}")
         policy_module = TensorDictModule(
-            self.actor_net,
+            actor_net,
             in_keys=self.in_keys,
             out_keys=["loc", "scale"],
         )
-        td = self.env.reset()
+        td = env.reset()
         policy_module(td)
-        self.policy_module = ProbabilisticActor(
+        policy_module = ProbabilisticActor(
             module=policy_module,
-            spec=self.env.action_spec,
+            spec=env.action_spec,
             in_keys=["loc", "scale"],
             distribution_class=TanhNormal,
             distribution_kwargs={
-                "min": 0,  # self.env.action_spec.space.minimum,
-                "max": 1,  # self.env.action_spec.space.maximum,
+                "min": 0,  # env.action_spec.space.minimum,
+                "max": 1,  # env.action_spec.space.maximum,
             },
             return_log_prob=True,  # we'll need the log-prob for the numerator of the importance weights
         )
-        logger.debug(f"Initialized policy: {self.policy_module}")
+        logger.debug(f"Initialized policy: {policy_module}")
         # Critic
-        self.value_net = MLP(
+        value_net = MLP(
             out_features=1,
             depth=n_mlp_layers,
             num_cells=num_cells,
             dropout=True,
         )
-        logger.debug(f"Initialized critic: {self.value_net}")
+        logger.debug(f"Initialized critic: {value_net}")
         value_module = ValueOperator(
-            module=self.value_net,
+            module=value_net,
             in_keys=self.in_keys,
         )
-        td = self.env.reset()
+        td = env.reset()
         value_module(td)
         # Loss
         advantage_module = GAE(
             gamma=gamma,
             lmbda=lmbda,
-            value_network=self.value_module,
+            value_network=value_module,
             average_gae=True,
         )
         loss_module = ClipPPOLoss(
-            actor=self.policy_module,
-            critic=self.value_module,
+            actor=policy_module,
+            critic=value_module,
             clip_epsilon=clip_epsilon,
             entropy_bonus=bool(entropy_eps),
             entropy_coef=entropy_eps,
@@ -166,7 +176,7 @@ class PPO(BaseRL):
             # gamma=0.99,
             loss_critic_type="smooth_l1",
         )
-        loss_module.set_keys(value_target=self.advantage_module.value_target_key)
+        loss_module.set_keys(value_target=advantage_module.value_target_key)
         # Call superclass
         super().__init__(
             env=env,
@@ -174,6 +184,7 @@ class PPO(BaseRL):
             policy_module=policy_module,
             value_module=value_module,
             advantage_module=advantage_module,
+            in_keys=self.in_keys,
             **kwargs,
         )
 
