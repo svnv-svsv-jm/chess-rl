@@ -4,6 +4,7 @@ __all__ = [
     "move_action_space",
     "action_one_hot_to_uci",
     "get_move_score",
+    "remove_illegal_move",
 ]
 
 import typing as ty
@@ -154,3 +155,23 @@ def move_action_space() -> ty.Tuple[torch.Tensor, ty.Dict[str, int]]:
     action_space = torch.zeros((action_space_size,), dtype=torch.int8)
     # Return
     return action_space, action_dict
+
+
+def remove_illegal_move(
+    action: torch.Tensor,
+    board: chess.Board,
+    device: torch.device = None,
+) -> torch.Tensor:
+    """Remove illegal moves from the actions."""
+    if device is None:
+        device = action.device
+    mask = torch.zeros_like(action, device=device).view(-1)
+    _, act_dict = move_action_space()
+    for uci, i in act_dict.items():
+        move = chess.Move.from_uci(uci)
+        if board.is_legal(move):
+            mask[i] = 1
+    if mask.dim() < action.dim():
+        mask = mask.unsqueeze(0)
+    action = action.to(device) * mask
+    return action.to(device)

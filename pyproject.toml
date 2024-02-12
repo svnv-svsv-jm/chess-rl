@@ -340,6 +340,7 @@ disable = [
     "consider-using-f-string",
     "too-few-public-methods",
     "abstract-method",
+    "f-string-without-interpolation",
 ]
 
 # Enable the message, report, category or checker with the given id(s). You can

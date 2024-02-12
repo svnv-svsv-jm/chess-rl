@@ -7,18 +7,21 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import lightning.pytorch as pl
 from lightning.pytorch.loggers import CSVLogger
-from torchrl.envs.utils import check_env_specs
 
 from shark.models import PPOChess
 from shark.env import ChessEnv
+from shark.utils import get_logged_metrics_from_trainer
 
 
-def test_ppo(engine_executable: str) -> None:
+@pytest.mark.parametrize("automatic_optimization", [False, True])
+def test_ppo(engine_executable: str, automatic_optimization: bool) -> None:
     """Test PPO on InvertedDoublePendulum."""
     model = PPOChess(
         env=ChessEnv(engine_executable),
-        frames_per_batch=1,
+        frames_per_batch=100,
+        sub_batch_size=64,
         total_frames=3,
+        automatic_optimization=automatic_optimization,
     )
     # Training
     trainer = pl.Trainer(
@@ -33,15 +36,7 @@ def test_ppo(engine_executable: str) -> None:
     )
     trainer.fit(model)
     # Get logged stuff
-    log_dir = trainer.log_dir
-    assert isinstance(log_dir, str)
-    logs = trainer.logged_metrics
-    assert isinstance(logs, dict)
-    logger.info(log_dir)
-    logger.info(logs)
-    filename = os.path.join(log_dir, "metrics.csv")
-    df = pd.read_csv(filename)
-    logger.info(df.head())
+    df: pd.DataFrame = get_logged_metrics_from_trainer(trainer)
     # Plot
     plt.figure(figsize=(8, 8))
     plt.subplot(2, 2, 1)
@@ -56,6 +51,7 @@ def test_ppo(engine_executable: str) -> None:
     plt.subplot(2, 2, 4)
     plt.plot(df["step_count/eval"].to_numpy())
     plt.title("Max step count (test)")
+    plt.savefig(os.path.join("pytest_artifacts", "metrics.png"))
     # plt.show()
 
 

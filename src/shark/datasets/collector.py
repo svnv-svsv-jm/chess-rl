@@ -1,5 +1,6 @@
 __all__ = ["CollectorDataset"]
 
+from loguru import logger
 import typing as ty
 import torch
 from torch.utils.data import IterableDataset, Dataset
@@ -11,6 +12,8 @@ from torchrl.envs import EnvBase
 from tensordict.nn import TensorDictModule
 from tensordict import TensorDict
 
+from shark.utils import find_device
+
 
 class CollectorDataset(IterableDataset):
     """Iterable Dataset containing the `ReplayBuffer` which will be updated with new experiences during training, and the `SyncDataCollector`."""
@@ -21,7 +24,7 @@ class CollectorDataset(IterableDataset):
         policy_module: TensorDictModule,
         frames_per_batch: int,
         total_frames: int,
-        device: torch.device,
+        device: torch.device = find_device(),
         split_trajs: bool = False,
         batch_size: int = 1,
         init_random_frames: int = 1,
@@ -53,28 +56,29 @@ class CollectorDataset(IterableDataset):
         # States
         self.length: ty.Optional[int] = None
 
-    def __len__(self) -> int:
-        """Return the number of experiences in the `ReplayBuffer`."""
-        if self.length is not None:
-            return self.length
-        L = len(self.replay_buffer)
-        if self.total_frames > L:
-            return self.total_frames
-        return L
+    # def __len__(self) -> int:
+    #     """Return the number of experiences in the `ReplayBuffer`."""
+    #     if self.length is not None:
+    #         return self.length
+    #     L = len(self.replay_buffer)
+    #     if self.total_frames > L:
+    #         return self.total_frames
+    #     return L
 
     def __iter__(self) -> ty.Iterator[TensorDict]:
         """Yield experiences from `SyncDataCollector` and store them in `ReplayBuffer`."""
         i = 0
         for i, tensordict_data in enumerate(self.collector):
+            logger.trace(f"Collecting {i}")
             assert isinstance(tensordict_data, TensorDict)
             data_view: TensorDict = tensordict_data.reshape(-1)
             self.replay_buffer.extend(data_view.cpu())
             yield tensordict_data.to(self.device)
         self.length = i
 
-    def __getitem__(self, idx: int = None, **kwargs: ty.Any) -> TensorDict:
-        """Sample from `ReplayBuffer`."""
-        return self.sample(**kwargs)
+    # def __getitem__(self, idx: int = None, **kwargs: ty.Any) -> TensorDict:
+    #     """Sample from `ReplayBuffer`."""
+    #     return self.sample(**kwargs)
 
     def sample(self, **kwargs: ty.Any) -> TensorDict:
         """Sample from `ReplayBuffer`."""

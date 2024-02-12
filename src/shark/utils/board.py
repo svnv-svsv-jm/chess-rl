@@ -22,7 +22,7 @@ from .const import (
 )
 
 
-def board_to_tensor(board: chess.Board, flatten: bool = True) -> Tensor:
+def board_to_tensor(board: chess.Board, flatten: bool) -> Tensor:
     """Converts current board to a Tensor.
 
     Args:
@@ -49,9 +49,7 @@ def board_to_tensor(board: chess.Board, flatten: bool = True) -> Tensor:
         QUEEN_WHITE: 11,
         KING_WHITE: 12,
     }
-
     tensor = torch.zeros((8, 8, len(list(piece_dict.values())))).long()
-
     for i in range(8):
         for j in range(8):
             square = chess.square(i, j)
@@ -62,8 +60,6 @@ def board_to_tensor(board: chess.Board, flatten: bool = True) -> Tensor:
                 tensor[i, j, piece_dict[piece_type]] = 1
             else:
                 tensor[i, j, piece_dict[FREE_SQUARE]] = 1
-
     if flatten:
         tensor = tensor.flatten()
-
     return tensor
