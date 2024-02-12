@@ -19,7 +19,6 @@ from torchrl.data import (
     OneHotDiscreteTensorSpec,
 )
 from torchrl.envs import EnvBase
-from torchrl.envs.utils import set_exploration_mode, _terminated_or_truncated, step_mdp
 from matplotlib import pyplot as plt
 
 from shark.utils import (
@@ -29,6 +28,7 @@ from shark.utils import (
     action_to_one_hot,
     remove_illegal_move,
 )
+from .patch import step_and_maybe_reset
 
 WORST_REWARD = -1e6
 
@@ -79,8 +79,6 @@ class ChessEnv(EnvBase):
         self.board = chess.Board()
         state = board_to_tensor(self.board, flatten=False)
         n_states = int(state.size(-1))
-        if self.flatten:
-            state = state.flatten()
         action_space, self.action_map = move_action_space()
         # Action is a one-hot tensor
         self.action_spec = OneHotDiscreteTensorSpec(
@@ -151,6 +149,8 @@ class ChessEnv(EnvBase):
             .to(self.observation_spec.dtype)
             .to(device)
         )
+        if self.flatten:
+            state = state.flatten()
         # Return new TensorDict
         td = TensorDict(
             {
@@ -175,6 +175,7 @@ class ChessEnv(EnvBase):
         """
         # Read action from input
         action_: Tensor = tensordict["action"]
+        logger.trace(f"Reading action: {action_.size()}")
         action = action_.float()  # .to(self.device)
         device = action.device
         uci = action_one_hot_to_uci(action)
@@ -236,6 +237,8 @@ class ChessEnv(EnvBase):
         done = self.board.is_game_over()
         # Update state
         state = board_to_tensor(self.board, flatten=self.flatten).to(self.observation_spec.dtype)
+        if self.flatten:
+            state = state.flatten()
         # Return new TensorDict
         td = TensorDict(
             {
@@ -378,68 +381,5 @@ class ChessEnv(EnvBase):
         self,
         tensordict: TensorDictBase,
     ) -> ty.Tuple[TensorDictBase, TensorDictBase]:
-        """Runs a step in the environment and (partially) resets it if needed.
-
-        Args:
-            tensordict (TensorDictBase): an input data structure for the :meth:`~.step`
-                method.
-
-        This method allows to easily code non-stopping rollout functions.
-
-        Examples:
-            >>> from torchrl.envs import ParallelEnv, GymEnv
-            >>> def rollout(env, n):
-            ...     data_ = env.reset()
-            ...     result = []
-            ...     for i in range(n):
-            ...         data, data_ = env.step_and_maybe_reset(data_)
-            ...         result.append(data)
-            ...     return torch.stack(result)
-            >>> env = ParallelEnv(2, lambda: GymEnv("CartPole-v1"))
-            >>> print(rollout(env, 2))
-            TensorDict(
-                fields={
-                    done: Tensor(shape=torch.Size([2, 2, 1]), device=cpu, dtype=torch.bool, is_shared=False),
-                    next: TensorDict(
-                        fields={
-                            done: Tensor(shape=torch.Size([2, 2, 1]), device=cpu, dtype=torch.bool, is_shared=False),
-                            observation: Tensor(shape=torch.Size([2, 2, 4]), device=cpu, dtype=torch.float32, is_shared=False),
-                            reward: Tensor(shape=torch.Size([2, 2, 1]), device=cpu, dtype=torch.float32, is_shared=False),
-                            terminated: Tensor(shape=torch.Size([2, 2, 1]), device=cpu, dtype=torch.bool, is_shared=False),
-                            truncated: Tensor(shape=torch.Size([2, 2, 1]), device=cpu, dtype=torch.bool, is_shared=False)},
-                        batch_size=torch.Size([2, 2]),
-                        device=cpu,
-                        is_shared=False),
-                    observation: Tensor(shape=torch.Size([2, 2, 4]), device=cpu, dtype=torch.float32, is_shared=False),
-                    terminated: Tensor(shape=torch.Size([2, 2, 1]), device=cpu, dtype=torch.bool, is_shared=False),
-                    truncated: Tensor(shape=torch.Size([2, 2, 1]), device=cpu, dtype=torch.bool, is_shared=False)},
-                batch_size=torch.Size([2, 2]),
-                device=cpu,
-                is_shared=False)
-        """
-        tensordict = self.step(tensordict)
-        if isinstance(tensordict, (TensorDict, TensorDictBase)):
-            assert "reward" in tensordict.keys()
-        # done and truncated are in done_keys
-        # We read if any key is done.
-        tensordict_ = step_mdp(
-            tensordict,
-            keep_other=True,
-            exclude_action=False,
-            exclude_reward=False,  # NOTE: Patched this
-            reward_keys=self.reward_keys,
-            action_keys=self.action_keys,
-            done_keys=self.done_keys,
-        )
-        if isinstance(tensordict_, (TensorDict, TensorDictBase)):
-            assert "reward" in tensordict_.keys(), f"{tensordict_}"
-        any_done = _terminated_or_truncated(
-            tensordict_,
-            full_done_spec=self.output_spec["full_done_spec"],
-            key="_reset",
-        )
-        if any_done:
-            tensordict_ = self.reset(tensordict_)
-        if isinstance(tensordict_, (TensorDict, TensorDictBase)):
-            assert "reward" in tensordict_.keys(), f"{tensordict_}"
-        return tensordict, tensordict_
+        """Patched."""
+        return step_and_maybe_reset(self, tensordict)

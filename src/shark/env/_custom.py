@@ -1,17 +1,11 @@
 __all__ = ["_CustomEnv"]
 
-from typing import Callable, Optional
 from loguru import logger
 import typing as ty
-import os
 
-import chess
-from chess.engine import SimpleEngine, PovScore
 import torch
-from torch import Tensor
-import random
 
-from tensordict import TensorDict, TensorDictBase
+from tensordict import TensorDict
 from torchrl.data import (
     CompositeSpec,
     UnboundedContinuousTensorSpec,
@@ -19,9 +13,6 @@ from torchrl.data import (
     OneHotDiscreteTensorSpec,
 )
 from torchrl.envs import EnvBase
-from torchrl.envs.utils import set_exploration_mode
-
-from matplotlib import pyplot as plt
 
 
 WORST_REWARD = -1e6

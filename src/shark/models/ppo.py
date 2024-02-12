@@ -3,20 +3,9 @@ __all__ = ["PPO", "PPOChess"]
 from loguru import logger
 import typing as ty
 
-import lightning.pytorch as pl
-from lightning.fabric.utilities.types import LRScheduler
-from lightning.pytorch.utilities.types import OptimizerLRSchedulerConfig, LRSchedulerConfigType
-from lightning.pytorch.core.optimizer import LightningOptimizer
 import torch
-from torch import Tensor
-from torch.utils.data import DataLoader
-from tensordict import TensorDict
 from tensordict.nn import TensorDictModule
 from tensordict.nn.distributions import NormalParamExtractor
-from torchrl.collectors import SyncDataCollector
-from torchrl.data.replay_buffers import ReplayBuffer
-from torchrl.data.replay_buffers.samplers import SamplerWithoutReplacement
-from torchrl.data.replay_buffers.storages import LazyTensorStorage
 from torchrl.envs import (
     Compose,
     DoubleToFloat,
@@ -27,13 +16,10 @@ from torchrl.envs import (
 )
 from torchrl.envs.libs.gym import GymEnv
 from torchrl.envs import EnvBase
-from torchrl.envs.utils import ExplorationType, set_exploration_type
 from torchrl.modules import ProbabilisticActor, TanhNormal, ValueOperator, MLP
 from torchrl.objectives import ClipPPOLoss
 from torchrl.objectives.value import GAE
 
-from shark.datasets import CollectorDataset
-from shark.utils import find_device
 from ._base import BaseRL
 
 
@@ -50,6 +36,7 @@ class PPO(BaseRL):
         clip_epsilon: float = 0.2,
         n_mlp_layers: int = 3,
         in_keys: ty.List[str] = ["observation"],
+        flatten_state: bool = False,
         **kwargs: ty.Any,
     ) -> None:
         """
@@ -105,17 +92,18 @@ class PPO(BaseRL):
         # Env transformations
         env = self.transformed_env(base_env)
         # Sanity check
-        logger.debug(f"observation_spec: {env.observation_spec}")
-        logger.debug(f"reward_spec: {env.reward_spec}")
-        logger.debug(f"done_spec: {env.done_spec}")
-        logger.debug(f"action_spec: {env.action_spec}")
-        logger.debug(f"state_spec: {env.state_spec}")
+        logger.debug(f"observation_spec: {base_env.observation_spec}")
+        logger.debug(f"reward_spec: {base_env.reward_spec}")
+        logger.debug(f"done_spec: {base_env.done_spec}")
+        logger.debug(f"action_spec: {base_env.action_spec}")
+        logger.debug(f"state_spec: {base_env.state_spec}")
         # Actor
-        shape = env.observation_spec["observation"].shape
+        shape = base_env.observation_spec["observation"].shape
         assert isinstance(shape, torch.Size)
-        out_features = env.action_spec.shape[-1]
+        out_features = base_env.action_spec.shape[-1]
         logger.debug(f"MLP out_shape: {out_features}")
         actor_net = torch.nn.Sequential(
+            torch.nn.Flatten(0) if flatten_state else torch.nn.Identity(),
             MLP(
                 out_features=2 * out_features,
                 depth=n_mlp_layers,
@@ -145,11 +133,14 @@ class PPO(BaseRL):
         )
         logger.debug(f"Initialized policy: {policy_module}")
         # Critic
-        value_net = MLP(
-            out_features=1,
-            depth=n_mlp_layers,
-            num_cells=num_cells,
-            dropout=True,
+        value_net = torch.nn.Sequential(
+            torch.nn.Flatten(1) if flatten_state else torch.nn.Identity(),
+            MLP(
+                out_features=1,
+                depth=n_mlp_layers,
+                num_cells=num_cells,
+                dropout=True,
+            ),
         )
         logger.debug(f"Initialized critic: {value_net}")
         value_module = ValueOperator(
@@ -209,16 +200,17 @@ class PPOChess(PPO):
 
     def transformed_env(self, base_env: EnvBase) -> EnvBase:
         """Setup transformed environment."""
+        # return base_env
         env = TransformedEnv(
             base_env,
             transform=Compose(
+                FlattenObservation(
+                    first_dim=0,
+                    last_dim=-1,
+                    in_keys=self.in_keys,
+                    allow_positive_dim=True,
+                ),
                 StepCounter(),
-                # FlattenObservation(
-                #     first_dim=1,
-                #     last_dim=-1,
-                #     in_keys=self.in_keys,
-                #     allow_positive_dim=True,
-                # ),
             ),
         )
         return env

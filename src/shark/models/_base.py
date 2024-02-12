@@ -28,12 +28,10 @@ from torchrl.envs import (
 from torchrl.envs.libs.gym import GymEnv
 from torchrl.envs import EnvBase
 from torchrl.envs.utils import ExplorationType, set_exploration_type
-from torchrl.modules import ProbabilisticActor, TanhNormal, ValueOperator, MLP
-from torchrl.objectives import ClipPPOLoss
-from torchrl.objectives.value import GAE
 
 from shark.datasets import CollectorDataset
 from shark.utils import find_device
+from shark.env.patch import step_and_maybe_reset
 
 
 class BaseRL(pl.LightningModule):
@@ -110,6 +108,8 @@ class BaseRL(pl.LightningModule):
             self.base_env = env
         # Env transformations
         self.env = self.transformed_env(self.base_env)
+        # Replace the method with your function
+        self.env.step_and_maybe_reset = lambda arg: step_and_maybe_reset(self.env, arg)
         # Sanity check
         logger.debug(f"observation_spec: {self.env.observation_spec}")
         logger.debug(f"reward_spec: {self.env.reward_spec}")
@@ -253,17 +253,19 @@ class BaseRL(pl.LightningModule):
 
     def step(
         self,
-        tensordict_data: TensorDict,
+        batch: TensorDict,
         batch_idx: int = None,
         tag: str = "train",
     ) -> Tensor:
         """Common step."""
-        logger.trace(f"[{batch_idx}] Batch: {tensordict_data.batch_size}")
+        logger.trace(f"[{batch_idx}] Batch: {batch.batch_size}")
         # We'll need an "advantage" signal to make PPO work.
-        # We re-compute it at each epoch as its value depends on the value
-        # network which is updated in the inner loop.
+        # We re-compute it at each epoch as its value depends on the value network which is updated in the inner loop
         with torch.no_grad():
-            self.advantage_module(tensordict_data)
+            try:
+                self.advantage_module(batch)
+            except RuntimeError as ex:
+                raise RuntimeError(f"{ex}\n{batch}") from ex
         loss = torch.tensor(0.0).to(self.device)
         n: int = self.frames_per_batch // self.sub_batch_size
         assert (
@@ -280,9 +282,9 @@ class BaseRL(pl.LightningModule):
                     losses[f"{key}/{tag}"] = value
         self.log_dict(losses)
         self.log(f"loss/{tag}", loss, prog_bar=True)
-        reward: Tensor = tensordict_data["next", "reward"]
+        reward: Tensor = batch["next", "reward"]
         self.log(f"reward/{tag}", reward.mean().item(), prog_bar=True)
-        step_count: Tensor = tensordict_data["step_count"]
+        step_count: Tensor = batch["step_count"]
         self.log(f"step_count/{tag}", step_count.max().item(), prog_bar=True)
         return loss
 

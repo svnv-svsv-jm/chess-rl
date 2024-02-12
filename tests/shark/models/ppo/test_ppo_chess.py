@@ -18,9 +18,8 @@ def test_ppo(engine_executable: str, automatic_optimization: bool) -> None:
     """Test PPO on InvertedDoublePendulum."""
     model = PPOChess(
         env=ChessEnv(engine_executable),
-        frames_per_batch=100,
-        sub_batch_size=64,
-        total_frames=3,
+        frames_per_batch=2,
+        total_frames=10,
         automatic_optimization=automatic_optimization,
     )
     # Training
