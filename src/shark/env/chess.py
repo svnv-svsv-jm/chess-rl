@@ -16,6 +16,7 @@ from torchrl.data import (
     CompositeSpec,
     UnboundedContinuousTensorSpec,
     BinaryDiscreteTensorSpec,
+    DiscreteTensorSpec,
     OneHotDiscreteTensorSpec,
 )
 from torchrl.envs import EnvBase
@@ -49,6 +50,7 @@ class ChessEnv(EnvBase):
         worst_reward: float = WORST_REWARD,
         illegal_amplifier: float = 1000,
         no_illegal_error: bool = True,
+        use_one_hot: bool = True,
         **kwargs: ty.Any,
     ) -> None:
         """
@@ -62,6 +64,7 @@ class ChessEnv(EnvBase):
         """
         super().__init__(**kwargs)  # call the constructor of the base class
         # Chess
+        self.use_one_hot = use_one_hot
         self.illegal_amplifier = illegal_amplifier
         self.worst_reward = worst_reward
         self.softmax = softmax
@@ -78,23 +81,40 @@ class ChessEnv(EnvBase):
         self.no_illegal_error = no_illegal_error
         self.board = chess.Board()
         state = board_to_tensor(self.board, flatten=False)
-        n_states = int(state.size(-1))
+        self.n_states = int(state.size(-1))
         action_space, self.action_map = move_action_space()
-        # Action is a one-hot tensor
-        self.action_spec = OneHotDiscreteTensorSpec(
-            n=int(action_space.numel()),
-            shape=action_space.size(),
-            device=self.device,
-            dtype=torch.float32,
-        )
-        # Observation space
-        observation_spec = OneHotDiscreteTensorSpec(
-            n=n_states,
-            shape=state.size(),
-            device=self.device,
-            dtype=torch.float32,
-        )
-        self.observation_spec = CompositeSpec(observation=observation_spec)
+        self.n_actions = int(action_space.size(-1))
+        if self.use_one_hot:
+            # Action is a one-hot tensor
+            self.action_spec = OneHotDiscreteTensorSpec(
+                n=self.n_actions,
+                shape=(self.n_actions,),
+                device=self.device,
+                dtype=torch.float32,
+            )
+            # Observation space
+            self._state = OneHotDiscreteTensorSpec(
+                n=self.n_states,
+                shape=(8, 8, self.n_states),
+                device=self.device,
+                dtype=torch.float32,
+            )
+        else:
+            # Action is a one-hot tensor
+            self.action_spec = DiscreteTensorSpec(
+                n=self.n_actions,
+                shape=(),
+                device=self.device,
+                dtype=torch.float32,
+            )
+            # Observation space
+            self._state = DiscreteTensorSpec(
+                n=self.n_states,
+                shape=(8, 8),
+                device=self.device,
+                dtype=torch.float32,
+            )
+        self.observation_spec = CompositeSpec(observation=self._state)
         # Unlimited reward space
         self.reward_spec = UnboundedContinuousTensorSpec(
             shape=torch.Size([1]),
@@ -174,10 +194,12 @@ class ChessEnv(EnvBase):
             TensorDict: _description_
         """
         # Read action from input
-        action_: Tensor = tensordict["action"]
-        logger.trace(f"Reading action: {action_.size()}")
-        action = action_.float()  # .to(self.device)
+        action: Tensor = tensordict["action"]
+        logger.trace(f"Reading action: {action.size()}")
         device = action.device
+        # Convert action to one-hot
+        action = self._action_to_one_hot(action)
+        # Get UCI
         uci = action_one_hot_to_uci(action)
         move = chess.Move.from_uci(uci)
         is_legal = self.board.is_legal(move)
@@ -237,12 +259,12 @@ class ChessEnv(EnvBase):
         done = self.board.is_game_over()
         # Update state
         state = board_to_tensor(self.board, flatten=self.flatten).to(self.observation_spec.dtype)
+        state = self._one_hot_state_to_discrete(state)
         if self.flatten:
             state = state.flatten()
         # Return new TensorDict
         td = TensorDict(
             {
-                # "action": action_,
                 "observation": state.to(device),
                 "reward": reward.to(device),
                 "done": done,
@@ -272,8 +294,9 @@ class ChessEnv(EnvBase):
                 logger.warning("No legal move...")
                 return None
             move = random.choice(legal_moves)
-        # Get one-hot action tensor
+        # Get action tensor
         action = action_to_one_hot(move.uci(), chess_board=self.board)
+        action = self._one_hot_action_to_discrete(action)
         action = action.to(self.action_spec.dtype)
         # Return TensorDict
         td = TensorDict(
@@ -383,3 +406,61 @@ class ChessEnv(EnvBase):
     ) -> ty.Tuple[TensorDictBase, TensorDictBase]:
         """Patched."""
         return step_and_maybe_reset(self, tensordict)
+
+    def _action_to_one_hot(self, action: torch.Tensor) -> torch.Tensor:
+        """Convert action to one-hot if necessary. Always call this.
+
+        Args:
+            action (torch.Tensor): LongTensor.
+
+        Returns:
+            torch.Tensor: One-hot tensor.
+        """
+        # Convert action to one-hot
+        if isinstance(self.action_spec, DiscreteTensorSpec):
+            eye = torch.eye(self.n_actions).to(action.device)
+            action = eye[action.long()]
+        return action.float()
+
+    def _one_hot_action_to_discrete(self, action: torch.Tensor) -> torch.Tensor:
+        """Convert one-hot action to discrete if necessary. Always call this.
+
+        Args:
+            action (torch.Tensor): LongTensor.
+
+        Returns:
+            torch.Tensor: One-hot tensor.
+        """
+        # Convert action to one-hot
+        if isinstance(self.action_spec, DiscreteTensorSpec):
+            action = action.argmax(-1)
+        return action.float()
+
+    def _state_to_one_hot(self, state: torch.Tensor) -> torch.Tensor:
+        """Convert state to one-hot if necessary. Always call this.
+
+        Args:
+            state (torch.Tensor): LongTensor.
+
+        Returns:
+            torch.Tensor: One-hot tensor.
+        """
+        # Convert action to one-hot
+        if isinstance(self._state, DiscreteTensorSpec):
+            eye = torch.eye(self.n_states).to(state.device)
+            state = eye[state.long()]
+        return state.float()
+
+    def _one_hot_state_to_discrete(self, state: torch.Tensor) -> torch.Tensor:
+        """Convert one-hot state to discrete if necessary. Always call this.
+
+        Args:
+            state (torch.Tensor): LongTensor.
+
+        Returns:
+            torch.Tensor: One-hot tensor.
+        """
+        # Convert state to one-hot
+        if isinstance(self._state, DiscreteTensorSpec):
+            state = state.argmax(-1)
+        return state.float()

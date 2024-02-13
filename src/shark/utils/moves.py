@@ -3,6 +3,7 @@ __all__ = [
     "action_to_one_hot",
     "move_action_space",
     "action_one_hot_to_uci",
+    "action_to_uci",
     "get_move_score",
     "remove_illegal_move",
 ]
@@ -58,6 +59,25 @@ def get_move_score(
     return score
 
 
+def action_to_uci(action: torch.Tensor) -> str:
+    """Decode a given tensor into a move UCI.
+
+    Args:
+        action (torch.Tensor): ()
+            Action. Should be an int.
+
+    Returns:
+        str:
+            Move UCI.
+    """
+    _, action_dict = move_action_space()
+    idx = action.view(-1).argmax()
+    moves = list(action_dict.keys())
+    uci = moves[idx]
+    logger.trace(f"Getting move from index {idx} out of {len(moves)} moves: {uci}")
+    return uci
+
+
 def action_one_hot_to_uci(action_one_hot: torch.Tensor) -> str:
     """Decode a given one-hot tensor into a move UCI.
 
@@ -69,9 +89,11 @@ def action_one_hot_to_uci(action_one_hot: torch.Tensor) -> str:
         str:
             Move UCI.
     """
+    n_act_ = int(action_one_hot.size(-1))
     action_space, action_dict = move_action_space()
+    n_act = int(action_space.numel())
     assert (
-        action_space.numel() == action_one_hot.numel()
+        n_act_ == n_act
     ), f"Action space has size {action_space.size()}, but the input action vector has size {action_one_hot.size()}"
     idx = action_one_hot.view(-1).argmax()
     moves = list(action_dict.keys())

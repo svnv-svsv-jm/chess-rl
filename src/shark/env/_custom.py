@@ -10,12 +10,9 @@ from torchrl.data import (
     CompositeSpec,
     UnboundedContinuousTensorSpec,
     BinaryDiscreteTensorSpec,
-    OneHotDiscreteTensorSpec,
+    DiscreteTensorSpec,
 )
 from torchrl.envs import EnvBase
-
-
-WORST_REWARD = -1e6
 
 
 class _CustomEnv(EnvBase):
@@ -27,16 +24,16 @@ class _CustomEnv(EnvBase):
     ) -> None:
         super().__init__(**kwargs)  # call the constructor of the base class
         # Action is a one-hot tensor
-        self.action_spec = OneHotDiscreteTensorSpec(
+        self.action_spec = DiscreteTensorSpec(
             n=10,
-            shape=(10,),
+            shape=(),
             device=self.device,
             dtype=torch.float32,
         )
         # Observation space
-        observation_spec = OneHotDiscreteTensorSpec(
+        observation_spec = DiscreteTensorSpec(
             n=13,
-            shape=(8, 8, 13),
+            shape=(8, 8),
             device=self.device,
             dtype=torch.float32,
         )

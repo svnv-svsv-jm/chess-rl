@@ -21,6 +21,7 @@ def test_ppo(engine_executable: str, automatic_optimization: bool) -> None:
         frames_per_batch=2,
         total_frames=10,
         automatic_optimization=automatic_optimization,
+        use_one_hot=False,
     )
     # Training
     trainer = pl.Trainer(

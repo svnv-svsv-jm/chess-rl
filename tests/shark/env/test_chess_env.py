@@ -12,8 +12,8 @@ from shark.env import ChessEnv
 from shark.utils import find_device
 
 
-@pytest.mark.parametrize("custom", [True, False])
-def test_use_env_in_collector(engine_executable: str, custom: bool) -> None:
+@pytest.mark.parametrize("custom, use_one_hot", [(True, None), (False, False), (False, True)])
+def test_use_env_in_collector(engine_executable: str, custom: bool, use_one_hot: bool) -> None:
     """Test `SyncDataCollector` on env."""
     device = find_device()
     if custom:
@@ -38,6 +38,7 @@ def test_use_env_in_collector(engine_executable: str, custom: bool) -> None:
         assert isinstance(td, TensorDict)
         if i > 2:
             break
+    logger.success(f"Passed for {env.__class__.__name__}")
 
 
 def test_chess_env(engine_executable: str) -> None:

@@ -198,6 +198,16 @@ class PPO(BaseRL):
 class PPOChess(PPO):
     """Same but overrides the `transformed_env` method."""
 
+    def __init__(
+        self,
+        *args: ty.Any,
+        use_one_hot: bool = True,
+        **kwargs: ty.Any,
+    ) -> None:
+        """Init."""
+        self.use_one_hot = use_one_hot
+        super().__init__(*args, **kwargs)
+
     def transformed_env(self, base_env: EnvBase) -> EnvBase:
         """Setup transformed environment."""
         # return base_env
@@ -206,7 +216,7 @@ class PPOChess(PPO):
             transform=Compose(
                 FlattenObservation(
                     first_dim=0,
-                    last_dim=-1,
+                    last_dim=-2 if self.use_one_hot else -1,
                     in_keys=self.in_keys,
                     allow_positive_dim=True,
                 ),
