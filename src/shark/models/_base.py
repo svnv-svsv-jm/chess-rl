@@ -17,7 +17,7 @@ from torchrl.envs import EnvBase
 from torchrl.envs.utils import ExplorationType, set_exploration_type
 
 from shark.datasets import CollectorDataset
-from shark.env.patch import step_and_maybe_reset
+from shark.utils.patch import step_and_maybe_reset
 
 
 class BaseRL(pl.LightningModule):

@@ -9,6 +9,12 @@ import lightning.pytorch as pl
 from lightning.pytorch.loggers import CSVLogger
 
 from shark.models import PPOPendulum
+from shark.utils.patch import transform_observation_spec, _cache_values
+import torchrl.objectives.utils
+from torchrl.envs import DoubleToFloat
+
+setattr(DoubleToFloat, "transform_observation_spec", transform_observation_spec)
+setattr(torchrl.objectives.utils, "_cache_values", _cache_values)
 
 
 def test_ppo() -> None:

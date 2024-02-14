@@ -29,7 +29,7 @@ from shark.utils import (
     action_to_one_hot,
     remove_illegal_move,
 )
-from .patch import step_and_maybe_reset
+from shark.utils.patch import step_and_maybe_reset
 
 WORST_REWARD = -1e6
 

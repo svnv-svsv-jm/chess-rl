@@ -1,10 +1,11 @@
-__all__ = ["step_and_maybe_reset"]
+__all__ = ["step_and_maybe_reset", "_cache_values", "transform_observation_spec"]
 
 from loguru import logger
 import typing as ty
 from tensordict import TensorDict, TensorDictBase
-from torchrl.envs import EnvBase
+from torchrl.envs import EnvBase, DTypeCastTransform
 from torchrl.envs.utils import _terminated_or_truncated, step_mdp
+from torchrl.data import TensorSpec
 
 
 def step_and_maybe_reset(
@@ -77,3 +78,52 @@ def step_and_maybe_reset(
     logger.trace(f"tensordict: {tensordict}")
     logger.trace(f"tensordict_: {tensordict_}")
     return tensordict, tensordict_
+
+
+def _cache_values(fun: ty.Callable) -> ty.Callable:
+    """Caches the tensordict returned by a property."""
+    name = fun.__name__
+
+    def new_fun(self: ty.Any, netname: str = None) -> ty.Any:
+        __dict__ = self.__dict__
+        try:
+            _cache = __dict__["_cache"]
+        except KeyError as ex:
+            __dict__["_cache"] = {}
+            _cache = __dict__["_cache"]
+        attr_name = name
+        if netname is not None:
+            attr_name += "_" + netname
+        if attr_name in _cache:
+            out = _cache[attr_name]
+            return out
+        if netname is not None:
+            out = fun(self, netname)
+        else:
+            out = fun(self)
+        # TODO: decide what to do with locked tds in functional calls
+        # if is_tensor_collection(out):
+        #     out.lock_()
+        _cache[attr_name] = out
+        return out
+
+    return new_fun
+
+
+def transform_observation_spec(
+    self: DTypeCastTransform,
+    observation_spec: TensorSpec,
+) -> TensorSpec:
+    """No idea."""
+    full_observation_spec = observation_spec
+    for observation_key, observation_spec in list(full_observation_spec.items(True, True)):
+        # find out_key that match the in_key
+        for in_key, out_key in zip(self.in_keys, self.out_keys):
+            if observation_key == in_key:
+                if observation_spec.dtype != self.dtype_in:
+                    self.dtype_in = observation_spec.dtype
+                    # raise TypeError(
+                    #     f"observation_spec.dtype is not {self.dtype_in}"
+                    # )
+                full_observation_spec[out_key] = self._transform_spec(observation_spec)
+    return full_observation_spec

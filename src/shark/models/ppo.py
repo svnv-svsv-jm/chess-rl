@@ -16,12 +16,39 @@ from torchrl.envs import (
 )
 from torchrl.envs import EnvBase
 from torchrl.modules import ProbabilisticActor, TanhNormal, ValueOperator, MLP, ConvNet
-from torchrl.objectives import ClipPPOLoss
+from torchrl.objectives import ClipPPOLoss as BuggedClipPPOLoss
 from torchrl.objectives.value import GAE
 
 from shark.env import ChessEnv
-from shark.utils import find_device
+from shark.utils.patch import _cache_values
 from ._base import BaseRL
+
+
+class ClipPPOLoss(BuggedClipPPOLoss):
+    """Let's patch this."""
+
+    def __init__(self, *args: ty.Any, **kwargs: ty.Any) -> None:
+        super().__init__(*args, **kwargs)
+        # self.__custom_dict__: ty.Dict[str, ty.Any] = {}
+        # self.__dict__["_cache"] = {}
+
+    @property
+    @_cache_values
+    def _cached_critic_network_params_detached(self) -> ty.Any:
+        if not self.functional:
+            return None
+        return self.critic_network_params.detach()
+
+    # @property
+    # def __dict__(self) -> ty.Dict[str, ty.Any]:
+    #     if "_cache" not in self.__custom_dict__:
+    #         self.__custom_dict__["_cache"] = {}
+    #     return self.__custom_dict__
+
+    # @__dict__.setter
+    # def __dict__(self, value: ty.Dict[str, ty.Any]) -> None:
+    #     assert isinstance(value, dict)
+    #     self.__custom_dict__ = value
 
 
 class PPO(BaseRL):
@@ -225,11 +252,13 @@ class PPOPendulum(PPO):
     def transformed_env(self, base_env: EnvBase) -> EnvBase:
         """Setup transformed environment."""
         obs_norm = ObservationNorm(in_keys=self.in_keys)
+        double2float = DoubleToFloat(in_keys=self.in_keys)
+        # setattr(double2float, "transform_observation_spec", transform_observation_spec)
         env = TransformedEnv(
             base_env,
             transform=Compose(
                 obs_norm,
-                DoubleToFloat(in_keys=self.in_keys),
+                double2float,
                 StepCounter(),
             ),
         )
