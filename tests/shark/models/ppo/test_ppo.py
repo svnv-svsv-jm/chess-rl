@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 import lightning.pytorch as pl
 from lightning.pytorch.loggers import CSVLogger
 
-from shark.models import PPO
+from shark.models import PPOPendulum
 
 
 def test_ppo() -> None:
@@ -16,7 +16,7 @@ def test_ppo() -> None:
     frame_skip = 1
     frames_per_batch = frame_skip * 10
     total_frames = 100
-    model = PPO(
+    model = PPOPendulum(
         env="InvertedDoublePendulum-v4",
         frame_skip=frame_skip,
         frames_per_batch=frames_per_batch,

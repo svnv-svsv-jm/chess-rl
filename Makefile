@@ -66,6 +66,7 @@ pytest-nbmake:
 
 test: mypy pytest pytest-nbmake
 
+tests: test
 
 # -----------
 # git

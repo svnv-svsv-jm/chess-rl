@@ -1,4 +1,4 @@
-__all__ = ["PPO", "PPOChess"]
+__all__ = ["PPO", "PPOPendulum", "PPOChess"]
 
 from loguru import logger
 import typing as ty
@@ -14,27 +14,28 @@ from torchrl.envs import (
     TransformedEnv,
     FlattenObservation,
 )
-from torchrl.envs.libs.gym import GymEnv
 from torchrl.envs import EnvBase
-from torchrl.modules import ProbabilisticActor, TanhNormal, ValueOperator, MLP
+from torchrl.modules import ProbabilisticActor, TanhNormal, ValueOperator, MLP, ConvNet
 from torchrl.objectives import ClipPPOLoss
 from torchrl.objectives.value import GAE
 
+from shark.env import ChessEnv
+from shark.utils import find_device
 from ._base import BaseRL
 
 
 class PPO(BaseRL):
-    """Basic PPO Model. See: https://pytorch.org/rl/tutorials/coding_ppo.html#training-loop"""
+    """Base for PPO Model. See: https://pytorch.org/rl/tutorials/coding_ppo.html#training-loop"""
 
     def __init__(
         self,
+        actor_nn: torch.nn.Module,
+        value_nn: torch.nn.Module,
         env: ty.Union[str, EnvBase] = "InvertedDoublePendulum-v4",
-        num_cells: int = 256,
         gamma: float = 0.99,
         lmbda: float = 0.95,
         entropy_eps: float = 1e-4,
         clip_epsilon: float = 0.2,
-        n_mlp_layers: int = 3,
         in_keys: ty.List[str] = ["observation"],
         flatten_state: bool = False,
         **kwargs: ty.Any,
@@ -75,20 +76,12 @@ class PPO(BaseRL):
                 "value_module",
             ]
         )
-        self.num_cells = num_cells
         self.gamma = gamma
         self.lmbda = lmbda
         self.entropy_eps = entropy_eps
         self.in_keys = in_keys
         # Environment
-        if isinstance(env, str):
-            base_env = GymEnv(
-                env,
-                device=kwargs.get("device", None),
-                frame_skip=kwargs.get("frame_skip", None),
-            )
-        else:
-            base_env = env
+        base_env = self._init_env(env)
         # Env transformations
         env = self.transformed_env(base_env)
         # Sanity check
@@ -104,12 +97,7 @@ class PPO(BaseRL):
         logger.debug(f"MLP out_shape: {out_features}")
         actor_net = torch.nn.Sequential(
             torch.nn.Flatten(0) if flatten_state else torch.nn.Identity(),
-            MLP(
-                out_features=2 * out_features,
-                depth=n_mlp_layers,
-                num_cells=num_cells,
-                dropout=True,
-            ),
+            actor_nn,
             NormalParamExtractor(),
         )
         logger.debug(f"Initialized actor: {actor_net}")
@@ -135,12 +123,7 @@ class PPO(BaseRL):
         # Critic
         value_net = torch.nn.Sequential(
             torch.nn.Flatten(1) if flatten_state else torch.nn.Identity(),
-            MLP(
-                out_features=1,
-                depth=n_mlp_layers,
-                num_cells=num_cells,
-                dropout=True,
-            ),
+            value_nn,
         )
         logger.debug(f"Initialized critic: {value_net}")
         value_module = ValueOperator(
@@ -179,6 +162,66 @@ class PPO(BaseRL):
             **kwargs,
         )
 
+
+class PPOPendulum(PPO):
+    """Basic PPO Model. See: https://pytorch.org/rl/tutorials/coding_ppo.html#training-loop"""
+
+    def __init__(
+        self,
+        env: ty.Union[str, EnvBase] = "InvertedDoublePendulum-v4",
+        num_cells: int = 256,
+        n_mlp_layers: int = 3,
+        **kwargs: ty.Any,
+    ) -> None:
+        """
+        Args:
+            env (ty.Union[str, EnvBase], optional): _description_. Defaults to "InvertedDoublePendulum-v4".
+            num_cells (int, optional): _description_. Defaults to 256.
+            lr (float, optional): _description_. Defaults to 3e-4.
+            max_grad_norm (float, optional): _description_. Defaults to 1.0.
+            frame_skip (int, optional): _description_. Defaults to 1.
+            frames_per_batch (int, optional): _description_. Defaults to 100.
+            total_frames (int, optional): _description_. Defaults to 100_000.
+            accelerator (ty.Union[str, torch.device], optional): _description_. Defaults to "cpu".
+            sub_batch_size (int, optional):
+                Cardinality of the sub-samples gathered from the current data in the inner loop.
+                Defaults to `1`.
+            clip_epsilon (float, optional): _description_. Defaults to 0.2.
+            gamma (float, optional): _description_. Defaults to 0.99.
+            lmbda (float, optional): _description_. Defaults to 0.95.
+            entropy_eps (float, optional): _description_. Defaults to 1e-4.
+            lr_monitor (str, optional): _description_. Defaults to "loss/train".
+            lr_monitor_strict (bool, optional): _description_. Defaults to False.
+            rollout_max_steps (int, optional): _description_. Defaults to 1000.
+            n_mlp_layers (int, optional): _description_. Defaults to 3.
+            in_keys (ty.List[str], optional): _description_. Defaults to ["observation"].
+            flatten (bool, optional): _description_. Defaults to False.
+            flatten_start_dim (int, optional): _description_. Defaults to 0.
+            legacy (bool, optional): _description_. Defaults to False.
+            automatic_optimization (bool, optional): _description_. Defaults to True.
+        """
+        base_env = self._init_env(env, **kwargs)
+        out_features = base_env.action_spec.shape[-1]
+        actor_nn = MLP(
+            out_features=2 * out_features,
+            depth=n_mlp_layers,
+            num_cells=num_cells,
+            dropout=True,
+        )
+        value_nn = MLP(
+            out_features=1,
+            depth=n_mlp_layers,
+            num_cells=num_cells,
+            dropout=True,
+        )
+        # Call superclass
+        super().__init__(
+            env=env,
+            actor_nn=actor_nn,
+            value_nn=value_nn,
+            **kwargs,
+        )
+
     def transformed_env(self, base_env: EnvBase) -> EnvBase:
         """Setup transformed environment."""
         obs_norm = ObservationNorm(in_keys=self.in_keys)
@@ -191,7 +234,7 @@ class PPO(BaseRL):
             ),
         )
         obs_norm.init_stats(num_iter=1000, reduce_dim=0, cat_dim=0)
-        logger.debug(f"normalization constant shape: {env.transform[0].loc.shape}")
+        logger.debug(f"normalization constant shape: {obs_norm.loc.shape}")
         return env
 
 
@@ -200,13 +243,47 @@ class PPOChess(PPO):
 
     def __init__(
         self,
-        *args: ty.Any,
+        engine_executable: str = None,
+        n_mlp_layers: int = 3,
+        num_mlp_cells: ty.Sequence | int = 256,
+        depth: int = 3,
+        num_cells: ty.Sequence | int = 256,
+        kernel_sizes: ty.Sequence[int | ty.Sequence[int]] | int = 3,
+        strides: ty.Sequence | int = 1,
+        paddings: ty.Sequence | int = 0,
         use_one_hot: bool = True,
         **kwargs: ty.Any,
     ) -> None:
         """Init."""
         self.use_one_hot = use_one_hot
-        super().__init__(*args, **kwargs)
+        base_env = ChessEnv(engine_executable)
+        out_features = base_env.action_spec.shape[-1]
+        mlp_kwargs = dict(
+            depth=n_mlp_layers,
+            num_cells=num_mlp_cells,
+            dropout=True,
+        )
+        cnn_kwargs = dict(
+            depth=depth,
+            num_cells=num_cells,
+            kernel_sizes=kernel_sizes,
+            strides=strides,
+            paddings=paddings,
+        )
+        actor_nn = torch.nn.Sequential(
+            ConvNet(**cnn_kwargs),
+            MLP(out_features=2 * out_features, **mlp_kwargs),
+        )
+        value_nn = torch.nn.Sequential(
+            ConvNet(**cnn_kwargs),
+            MLP(out_features=1, **mlp_kwargs),
+        )
+        super().__init__(
+            env=ChessEnv(engine_executable),
+            actor_nn=actor_nn,
+            value_nn=value_nn,
+            **kwargs,
+        )
 
     def transformed_env(self, base_env: EnvBase) -> EnvBase:
         """Setup transformed environment."""
@@ -214,12 +291,12 @@ class PPOChess(PPO):
         env = TransformedEnv(
             base_env,
             transform=Compose(
-                FlattenObservation(
-                    first_dim=0,
-                    last_dim=-2 if self.use_one_hot else -1,
-                    in_keys=self.in_keys,
-                    allow_positive_dim=True,
-                ),
+                # FlattenObservation(
+                #     first_dim=0,
+                #     last_dim=-2 if self.use_one_hot else -1,
+                #     in_keys=self.in_keys,
+                #     allow_positive_dim=True,
+                # ),
                 StepCounter(),
             ),
         )

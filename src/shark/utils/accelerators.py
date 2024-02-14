@@ -7,8 +7,10 @@ from lightning.pytorch.accelerators.cuda import CUDAAccelerator
 from lightning.pytorch.accelerators.mps import MPSAccelerator
 
 
-def find_device(accelerator: ty.Union[torch.device, str] = "auto") -> torch.device:
+def find_device(accelerator: ty.Union[torch.device, str] = None) -> torch.device:
     """Automatically finds system's device for PyTorch."""
+    if accelerator is None:
+        accelerator = "auto"
     if isinstance(accelerator, torch.device):
         return accelerator
     device = _choose_auto_accelerator(accelerator)
@@ -17,7 +19,7 @@ def find_device(accelerator: ty.Union[torch.device, str] = "auto") -> torch.devi
 
 
 def _choose_auto_accelerator(accelerator_flag: str) -> str:
-    """Choose the accelerator type (str) based on availability when ``accelerator='auto'``."""
+    """Choose the accelerator type (str) based on availability when `accelerator='auto'`."""
     accelerator_flag = accelerator_flag.lower()
     assert accelerator_flag in ("auto", "cpu", "mps", "cuda")
     try:

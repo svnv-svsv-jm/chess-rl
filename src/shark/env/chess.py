@@ -39,7 +39,7 @@ class ChessEnv(EnvBase):
 
     def __init__(
         self,
-        engine_path: str = os.environ.get("CHESS_ENGINE_EXECUTABLE", "stockfish"),
+        engine_path: str = None,
         time: float = 5,
         depth: int = 20,
         flatten_state: bool = False,
@@ -68,6 +68,8 @@ class ChessEnv(EnvBase):
         self.illegal_amplifier = illegal_amplifier
         self.worst_reward = worst_reward
         self.softmax = softmax
+        if engine_path is None:
+            engine_path = os.environ.get("CHESS_ENGINE_EXECUTABLE", "stockfish")
         self.engine_path = engine_path
         self.time = time
         self.depth = depth

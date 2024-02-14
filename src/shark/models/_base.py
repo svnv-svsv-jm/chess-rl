@@ -9,28 +9,14 @@ from lightning.pytorch.utilities.types import OptimizerLRSchedulerConfig, LRSche
 from lightning.pytorch.core.optimizer import LightningOptimizer
 import torch
 from torch import Tensor
-from torch.utils.data import DataLoader
 from tensordict import TensorDict
 from tensordict.nn import TensorDictModule
-from tensordict.nn.distributions import NormalParamExtractor
-from torchrl.collectors import SyncDataCollector
 from torchrl.data.replay_buffers import ReplayBuffer
-from torchrl.data.replay_buffers.samplers import SamplerWithoutReplacement
-from torchrl.data.replay_buffers.storages import LazyTensorStorage
-from torchrl.envs import (
-    Compose,
-    DoubleToFloat,
-    ObservationNorm,
-    StepCounter,
-    TransformedEnv,
-    FlattenObservation,
-)
 from torchrl.envs.libs.gym import GymEnv
 from torchrl.envs import EnvBase
 from torchrl.envs.utils import ExplorationType, set_exploration_type
 
 from shark.datasets import CollectorDataset
-from shark.utils import find_device
 from shark.env.patch import step_and_maybe_reset
 
 
@@ -50,7 +36,6 @@ class BaseRL(pl.LightningModule):
         frame_skip: int = 1,
         frames_per_batch: int = 100,
         total_frames: int = 100_000,
-        accelerator: ty.Union[str, torch.device] = "cpu",
         sub_batch_size: int = 1,
         lr_monitor: str = "loss/train",
         lr_monitor_strict: bool = False,
@@ -96,21 +81,14 @@ class BaseRL(pl.LightningModule):
         self.sub_batch_size = sub_batch_size
         self.rollout_max_steps = rollout_max_steps
         self.in_keys = in_keys
-        device = find_device(accelerator)
         # Environment
-        if isinstance(env, str):
-            self.base_env = GymEnv(
-                env,
-                device=device,
-                frame_skip=frame_skip,
-            )
-        else:
-            self.base_env = env
+        self.base_env = self._init_env(env, frame_skip=frame_skip)
         # Env transformations
         self.env = self.transformed_env(self.base_env)
-        # Replace the method with your function
+        # Patch this method with your function
         self.env.step_and_maybe_reset = lambda arg: step_and_maybe_reset(self.env, arg)
         # Sanity check
+        logger.debug(f"Env: {self.base_env}")
         logger.debug(f"observation_spec: {self.env.observation_spec}")
         logger.debug(f"reward_spec: {self.env.reward_spec}")
         logger.debug(f"done_spec: {self.env.done_spec}")
@@ -128,24 +106,32 @@ class BaseRL(pl.LightningModule):
         self.scheduler: torch.optim.lr_scheduler.CosineAnnealingLR
         self.lr_monitor = lr_monitor
         self.lr_monitor_strict = lr_monitor_strict
-        self.dataset: CollectorDataset
+        self._dataset: CollectorDataset
 
     @property
     def replay_buffer(self) -> ReplayBuffer:
         """Gets replay buffer from collector."""
         return self.dataset.replay_buffer
 
+    @property
+    def dataset(self) -> CollectorDataset:
+        """Gets dataset."""
+        if not hasattr(self, "_dataset") or not isinstance(
+            getattr(self, "_dataset"), CollectorDataset
+        ):
+            self._dataset = CollectorDataset(
+                env=self.env,
+                policy_module=self.policy_module,
+                frames_per_batch=self.frames_per_batch,
+                total_frames=self.total_frames,
+                device=self.device,
+                # batch_size=self.sub_batch_size,
+            )
+        return self._dataset
+
     def setup(self, stage: str = None) -> None:
         """Set up collector."""
         logger.debug(f"device: {self.device}")
-        self.dataset = CollectorDataset(
-            env=self.env,
-            policy_module=self.policy_module,
-            frames_per_batch=self.frames_per_batch,
-            total_frames=self.total_frames,
-            device=self.device,
-            # batch_size=self.sub_batch_size,
-        )
 
     def train_dataloader(self) -> ty.Iterable[TensorDict]:
         """Create DataLoader for training."""
@@ -154,9 +140,13 @@ class BaseRL(pl.LightningModule):
     def configure_optimizers(self) -> OptimizerLRSchedulerConfig:
         """Configures the optimizer (`torch.optim.Adam`) and the learning rate scheduler (`torch.optim.lr_scheduler.CosineAnnealingLR`)."""
         self.optimizer = torch.optim.Adam(self.loss_module.parameters(), self.lr)
+        try:
+            max_steps = self.trainer.max_steps
+        except RuntimeError:
+            max_steps = 1
         self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
             self.optimizer,
-            max(1, self.trainer.max_steps // self.frames_per_batch),
+            max(1, max_steps // self.frames_per_batch),
             0.0,
         )
         lr_scheduler = LRSchedulerConfigType(  # type: ignore
@@ -274,12 +264,7 @@ class BaseRL(pl.LightningModule):
         for _ in range(n):
             subdata: TensorDict = self.replay_buffer.sample(self.sub_batch_size)
             loss_vals: TensorDict = self.loss_module(subdata.to(self.device))
-            losses: ty.Dict[str, torch.Tensor] = {}
-            for key, value in loss_vals.items():
-                if "loss_" in key:
-                    loss = loss + value
-                    logger.trace(f"key: {value}")
-                    losses[f"{key}/{tag}"] = value
+            loss, losses = self.loss(loss_vals, loss, tag)
         self.log_dict(losses)
         self.log(f"loss/{tag}", loss, prog_bar=True)
         reward: Tensor = batch["next", "reward"]
@@ -287,6 +272,24 @@ class BaseRL(pl.LightningModule):
         step_count: Tensor = batch["step_count"]
         self.log(f"step_count/{tag}", step_count.max().item(), prog_bar=True)
         return loss
+
+    def loss(
+        self,
+        loss_vals: TensorDict,
+        loss: torch.Tensor = None,
+        tag: str = "train",
+    ) -> ty.Tuple[torch.Tensor, ty.Dict[str, torch.Tensor]]:
+        """Updates the input loss and extracts losses from input `TensorDict` and collects them into a dict."""
+        if loss is None:
+            loss = torch.tensor(0.0).to(loss_vals.device)
+        loss_dict: ty.Dict[str, torch.Tensor] = {}
+        for key, value in loss_vals.items():
+            if "loss_" in key:
+                loss = loss + value
+                logger.trace(f"key: {value}")
+                loss_dict[f"{key}/{tag}"] = value
+        assert isinstance(loss, torch.Tensor)
+        return loss, loss_dict
 
     def rollout(self, tag: str = "eval") -> None:
         """We evaluate the policy once every `sefl.trainer.val_check_interval` batches of data.
@@ -306,11 +309,21 @@ class BaseRL(pl.LightningModule):
 
     def transformed_env(self, base_env: EnvBase) -> EnvBase:
         """Setup transformed environment."""
-        env = TransformedEnv(
-            base_env,
-            transform=Compose(
-                DoubleToFloat(in_keys=self.in_keys),
-                StepCounter(),
-            ),
-        )
+        return base_env
+
+    def _init_env(self, env: ty.Union[str, EnvBase], **kwargs: ty.Any) -> EnvBase:
+        """Utility function to init an env.
+
+        Args:
+            env (ty.Union[str, EnvBase]): _description_
+
+        Returns:
+            EnvBase: _description_
+        """
+        if isinstance(env, str):
+            env = GymEnv(
+                env,
+                device=kwargs.get("device", "cpu"),
+                frame_skip=kwargs.get("frame_skip", 1),
+            )
         return env

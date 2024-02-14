@@ -7,9 +7,9 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import lightning.pytorch as pl
 from lightning.pytorch.loggers import CSVLogger
+from tensordict import TensorDict
 
 from shark.models import PPOChess
-from shark.env import ChessEnv
 from shark.utils import get_logged_metrics_from_trainer
 
 
@@ -17,12 +17,26 @@ from shark.utils import get_logged_metrics_from_trainer
 def test_ppo(engine_executable: str, automatic_optimization: bool) -> None:
     """Test PPO on InvertedDoublePendulum."""
     model = PPOChess(
-        env=ChessEnv(engine_executable),
+        engine_executable=engine_executable,
         frames_per_batch=2,
         total_frames=10,
         automatic_optimization=automatic_optimization,
         use_one_hot=False,
     )
+    # Test
+    loader = model.train_dataloader()
+    cfg = model.configure_optimizers()
+    optimizer = cfg["optimizer"]
+    for batch in loader:
+        model.advantage_module(batch)
+        subdata: TensorDict = model.replay_buffer.sample(model.sub_batch_size)
+        loss_vals = model.loss_module(subdata.to(model.device))
+        loss, losses = model.loss(loss_vals)
+        logger.info(losses)
+        optimizer.zero_grad()  # type: ignore
+        loss.backward()
+        logger.success(f"Able to run optim step.")
+        break
     # Training
     trainer = pl.Trainer(
         accelerator="cpu",

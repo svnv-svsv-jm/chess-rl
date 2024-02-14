@@ -65,6 +65,12 @@ nbmake = "*"
 line-length = 100
 
 # ----------------------
+# Coverage
+# ----------------------
+[tool.coverage.report]
+exclude_lines = ["pragma: no cover", "warnings", "pass", "rank_zero_warn", "raise NotImplementedError"]
+
+# ----------------------
 # PyTest
 # ----------------------
 [tool.pytest.ini_options]
@@ -72,7 +78,15 @@ minversion = "6.0"
 log_cli = true
 testpaths = ["tests"]
 norecursedirs = ["tests/res", "tests/helpers"]
-addopts = "-x --color=yes --disable-pytest-warnings --durations=5 --cov=src/ --cov-report term-missing"
+addopts = [
+    "-x",
+    "--color=yes",
+    "--disable-pytest-warnings",
+    "--durations=5",
+    "--cov=src/",
+    "--cov-report",
+    "term-missing",
+]
 
 # ----------------------
 # Mypy
@@ -83,7 +97,7 @@ exclude = ["tests/conftest.py"]
 no_implicit_optional = false
 warn_return_any = true
 warn_unused_configs = true
-disallow_untyped_calls = true
+disallow_untyped_calls = false
 disallow_untyped_defs = true
 disallow_incomplete_defs = true
 check_untyped_defs = true

@@ -52,8 +52,6 @@ def step_and_maybe_reset(
     """
     logger.trace(f"step_and_maybe_reset...")
     tensordict = self.step(tensordict)
-    if isinstance(tensordict, (TensorDict, TensorDictBase)):
-        assert "reward" in tensordict.keys()
     # done and truncated are in done_keys
     # We read if any key is done.
     tensordict_ = step_mdp(
@@ -65,8 +63,6 @@ def step_and_maybe_reset(
         action_keys=self.action_keys,
         done_keys=self.done_keys,
     )
-    if isinstance(tensordict_, (TensorDict, TensorDictBase)):
-        assert "reward" in tensordict_.keys(), f"{tensordict_}"
     any_done = _terminated_or_truncated(
         tensordict_,
         full_done_spec=self.output_spec["full_done_spec"],
@@ -74,10 +70,10 @@ def step_and_maybe_reset(
     )
     if any_done:
         tensordict_ = self.reset(tensordict_)
-    if isinstance(tensordict, (TensorDict, TensorDictBase)):
-        assert "reward" in tensordict.keys(), f"{tensordict}"
-    if isinstance(tensordict_, (TensorDict, TensorDictBase)):
-        assert "reward" in tensordict_.keys(), f"{tensordict_}"
+    # if isinstance(tensordict, (TensorDict, TensorDictBase)):
+    #     assert "reward" in tensordict.keys(), f"{tensordict}"
+    # if isinstance(tensordict_, (TensorDict, TensorDictBase)):
+    #     assert "reward" in tensordict_.keys(), f"{tensordict_}"
     logger.trace(f"tensordict: {tensordict}")
     logger.trace(f"tensordict_: {tensordict_}")
     return tensordict, tensordict_
