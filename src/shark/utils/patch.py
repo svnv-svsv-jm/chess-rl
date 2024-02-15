@@ -110,7 +110,7 @@ def _cache_values(fun: ty.Callable) -> ty.Callable:
     return new_fun
 
 
-def transform_observation_spec(
+def transform_observation_spec(  # pragma: no cover
     self: DTypeCastTransform,
     observation_spec: TensorSpec,
 ) -> TensorSpec:
