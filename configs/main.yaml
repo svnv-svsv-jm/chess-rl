@@ -1,0 +1,33 @@
+# @package _global_
+
+defaults:
+  - extras: default.yaml
+  - paths: default.yaml
+  - hydra: default.yaml
+  - callbacks: default.yaml
+  - logger: default.yaml
+  - model: ppo.yaml
+  - trainer: auto.yaml
+  - override hydra/sweeper: optuna
+  - override hydra/sweeper/sampler: tpe
+  # - override hydra/launcher: ray
+  - _self_
+
+trainer:
+  max_epochs: 200
+
+hydra:
+  mode: MULTIRUN
+  sweeper:
+    direction: minimize
+    n_trials: 30
+    n_jobs: 1
+    params:
+      model.n_mlp_layers: interval(2, 16)
+optimize_metric: loss/train
+
+ckpt_path: null
+
+stage: fit
+tag: PPO
+

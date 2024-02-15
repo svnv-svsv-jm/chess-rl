@@ -19,8 +19,8 @@ RUN apt-get update -qy  &&\
     apt-get install -y stockfish polyglot xboard &&\
     chmod 777 "$CHESS_ENGINE_EXECUTABLE"
 RUN pip install --upgrade pip virtualenv &&\
-    virtualenv .venv &&\
-    source .venv/bin/activate &&\
+    virtualenv /venv &&\
+    source /venv/bin/activate &&\
     make install
 
 # TensorBoard

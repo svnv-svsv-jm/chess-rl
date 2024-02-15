@@ -287,13 +287,17 @@ class PPOChess(PPO):
         self.use_one_hot = use_one_hot
         base_env = ChessEnv(engine_executable)
         out_features = base_env.action_spec.shape[-1]
+        if isinstance(num_cells, (float, int)):
+            num_cells = int(num_cells)
+        if isinstance(num_mlp_cells, (float, int)):
+            num_mlp_cells = int(num_mlp_cells)
         mlp_kwargs = dict(
-            depth=n_mlp_layers,
+            depth=int(n_mlp_layers),
             num_cells=num_mlp_cells,
             dropout=True,
         )
         cnn_kwargs = dict(
-            depth=depth,
+            depth=int(depth),
             num_cells=num_cells,
             kernel_sizes=kernel_sizes,
             strides=strides,

@@ -1,0 +1,7 @@
+_target_: shark.models.PPOChess
+engine_executable: stockfish
+frames_per_batch: 2
+total_frames: 10
+automatic_optimization: True
+use_one_hot: False
+n_mlp_layers: 3
