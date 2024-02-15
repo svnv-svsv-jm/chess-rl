@@ -6,7 +6,21 @@ import sys
 import lightning.pytorch as pl
 from lightning.pytorch.loggers import CSVLogger
 
-from shark.utils import find_device, nb_init, get_logged_metrics_from_trainer
+from shark.utils import (
+    find_device,
+    nb_init,
+    get_logged_metrics_from_trainer,
+    action_to_uci,
+    move_action_space,
+)
+
+
+def test_moves() -> None:
+    """Test moves for cov."""
+    act, _ = move_action_space()
+    act[0] = 1
+    uci = action_to_uci(act)
+    logger.info(f"Got {uci}")
 
 
 def test_utils_for_cov() -> None:
