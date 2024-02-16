@@ -49,18 +49,47 @@ class ChessEnv(EnvBase):
         softmax: bool = True,
         worst_reward: float = WORST_REWARD,
         illegal_amplifier: float = 1000,
-        no_illegal_error: bool = True,
+        lose_on_illegal_move: bool = True,
         use_one_hot: bool = True,
         **kwargs: ty.Any,
     ) -> None:
         """
         Args:
-            engine_path (str): _description_
-            time (float, optional): _description_. Defaults to 5.
-            depth (int, optional): _description_. Defaults to 20.
-            play_as (str, optional): _description_. Defaults to "white".
-            play_vs_engine (bool, optional): _description_. Defaults to True.
-            mate_amplifier (float, optional): _description_. Defaults to 100.
+            engine_path (str, optional):
+                Path to chess engine. Example: `stockfish`. Defaults to `None`.
+
+            time (float, optional):
+                Timeout value in seconds for engine. Defaults to `5`.
+
+            depth (int, optional):
+                Depth value for chess engine. Defaults to `20`.
+
+            flatten_state (bool, optional):
+                Whether to flatten or not the state. Defaults to `False`.
+
+            play_as (str, optional):
+                White or black. Defaults to `"white"`.
+
+            play_vs_engine (bool, optional):
+                Defaults to `True`.
+
+            mate_amplifier (float, optional):
+                Reward amplifier when mate happens. Defaults to `100`.
+
+            softmax (bool, optional):
+                If `True`, action values are `.softmax()`-ed. Defaults to `True`.
+
+            worst_reward (float, optional):
+                Value for the worst reward possible. Defaults to `WORST_REWARD`.
+
+            illegal_amplifier (float, optional):
+                Reward amplifier when an illegal move is selected. Defaults to `1000`.
+
+            lose_on_illegal_move (bool, optional): Defaults to `True`.
+                Whether actor loses when an illegal move is played. If `False`, given that the action tensor is a vector of probabilities, the first legal action value will be enforced from it, giving priority to actions with higher probability.
+
+            use_one_hot (bool, optional):
+                Whether to use one-hot vectors for state. Defaults to `True`.
         """
         super().__init__(**kwargs)  # call the constructor of the base class
         # Chess
@@ -80,7 +109,7 @@ class ChessEnv(EnvBase):
         self.mate_amplifier = mate_amplifier
         self.is_white = self.play_as in ["white"]
         self.flatten = flatten_state
-        self.no_illegal_error = no_illegal_error
+        self.lose_on_illegal_move = lose_on_illegal_move
         self.board = chess.Board()
         state = board_to_tensor(self.board, flatten=False)
         self.n_states = int(state.size(-1))
@@ -220,7 +249,7 @@ class ChessEnv(EnvBase):
             logger.trace(f"Chosen new (legal) move {move}")
         # Check if legal
         is_legal = self.board.is_legal(move)
-        if not is_legal and self.no_illegal_error:
+        if not is_legal and self.lose_on_illegal_move:
             logger.trace(f"Illegal move {move}, returning very bad reward")
             state: torch.Tensor = tensordict["observation"]
             state = state.to(self.observation_spec.dtype)
