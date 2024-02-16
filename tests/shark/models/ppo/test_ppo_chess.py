@@ -9,6 +9,7 @@ import lightning.pytorch as pl
 from lightning.pytorch.loggers import CSVLogger
 from tensordict import TensorDict
 
+from shark.callbacks import DebugCallback
 from shark.models import PPOChess
 from shark.utils import get_logged_metrics_from_trainer
 
@@ -49,6 +50,7 @@ def test_ppo(engine_executable: str, automatic_optimization: bool) -> None:
         max_steps=2,
         val_check_interval=1,
         log_every_n_steps=1,
+        callbacks=DebugCallback(level="TRACE"),
         logger=CSVLogger(
             save_dir="pytest_artifacts",
             name=model.__class__.__name__,
