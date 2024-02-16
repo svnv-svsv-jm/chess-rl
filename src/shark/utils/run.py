@@ -3,9 +3,7 @@ __all__ = ["init_experiment", "get_optimized_metric"]
 from loguru import logger
 import typing as ty
 from omegaconf import DictConfig, OmegaConf
-from omegaconf.errors import UnsupportedInterpolationType
 import hydra
-from hydra import initialize, initialize_config_dir, compose
 import torch
 import lightning.pytorch as pl
 from lightning.pytorch.callbacks.callback import Callback
@@ -15,7 +13,10 @@ from lightning.pytorch.loggers import Logger
 _OUT_METRIC = ty.Union[torch.Tensor, ty.Dict[str, torch.Tensor]]
 
 
-def init_experiment(cfg: DictConfig) -> ty.Tuple[pl.LightningModule, pl.Trainer]:
+def init_experiment(
+    cfg: DictConfig,
+    raise_error_on_hydra_shit: bool = True,
+) -> ty.Tuple[pl.LightningModule, pl.Trainer]:
     """Initializes model and trainer.
 
     Args:
@@ -28,11 +29,23 @@ def init_experiment(cfg: DictConfig) -> ty.Tuple[pl.LightningModule, pl.Trainer]
     # Model
     model: pl.LightningModule = hydra.utils.instantiate(cfg.model, _convert_="all")
     # Loggers
-    loggers: ty.Dict[str, Logger] = hydra.utils.instantiate(cfg.loggers, _convert_="all")
-    logs = list(loggers.values())
+    logs: ty.List[Logger] = []
+    try:
+        loggers: ty.Dict[str, Logger] = hydra.utils.instantiate(cfg.loggers, _convert_="all")
+        logs = list(loggers.values())
+    except Exception as ex:
+        if raise_error_on_hydra_shit:
+            raise ex  # pragma: no cover
+        logger.warning(ex)
     # Callbacks
-    callbacks: ty.Dict[str, Callback] = hydra.utils.instantiate(cfg.callbacks, _convert_="all")
-    cbs = list(callbacks.values())
+    cbs: ty.List[Callback] = []
+    try:
+        callbacks: ty.Dict[str, Callback] = hydra.utils.instantiate(cfg.callbacks, _convert_="all")
+        cbs = list(callbacks.values())
+    except Exception as ex:
+        if raise_error_on_hydra_shit:
+            raise ex  # pragma: no cover
+        logger.warning(ex)
     # Trainer
     # trainer: pl.Trainer = hydra.utils.instantiate(cfg.trainer, _convert_="all")
     trainer: dict = OmegaConf.to_container(cfg.trainer)  # type: ignore
@@ -41,7 +54,9 @@ def init_experiment(cfg: DictConfig) -> ty.Tuple[pl.LightningModule, pl.Trainer]
     trainer.pop("default_root_dir", None)
     try:
         default_root_dir = cfg.paths.output_dir
-    except UnsupportedInterpolationType:
+    except Exception as ex:
+        if raise_error_on_hydra_shit:
+            raise ex  # pragma: no cover
         default_root_dir = None
     pl_trainer = pl.Trainer(
         default_root_dir=default_root_dir,

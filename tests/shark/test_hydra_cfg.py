@@ -25,9 +25,9 @@ CONFIG_NAME = "test"
 def test_yaml_config() -> None:
     """Tests we can create an experiment (model + trainer + callbacks etc.) from the Hydra config."""
     if __file__ not in sys.argv[0]:
-        pytest.skip("Skipping this when running all tests.")
-    logger.info("Testing for config.yaml files...")
-    load_and_run()
+        load_and_run_compose_api()
+    else:
+        load_and_run_hydra_main()
 
 
 @hydra.main(
@@ -35,7 +35,17 @@ def test_yaml_config() -> None:
     config_path=os.path.join(ROOT, "configs"),
     config_name=CONFIG_NAME,
 )
-def load_and_run(cfg: DictConfig = None) -> ty.Optional[float]:
+def load_and_run_hydra_main(cfg: DictConfig = None) -> ty.Optional[float]:
+    """Hydra main call."""
+    return _load_and_run(cfg)
+
+
+def load_and_run_compose_api(cfg: DictConfig = None) -> ty.Optional[float]:
+    """Hydra Compose API."""
+    return _load_and_run(cfg)
+
+
+def _load_and_run(cfg: DictConfig = None) -> ty.Optional[float]:
     """Load configuration and run a training."""
     if cfg is None:
         with initialize_config_dir(config_dir=os.path.join(ROOT, "configs")):
@@ -53,7 +63,7 @@ def load_and_run(cfg: DictConfig = None) -> ty.Optional[float]:
             )
     assert cfg is not None
     # Get model and trainer
-    model, trainer = init_experiment(cfg)
+    model, trainer = init_experiment(cfg, raise_error_on_hydra_shit=False)
     assert isinstance(model, PPOChess)
     assert isinstance(trainer, pl.Trainer)
     # Train
