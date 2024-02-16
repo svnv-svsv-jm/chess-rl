@@ -9,6 +9,7 @@ import lightning.pytorch as pl
 from lightning.pytorch.loggers import CSVLogger
 
 from shark.models import PPOPendulum
+from shark.utils import plot_metrics
 
 
 def test_ppo() -> None:
@@ -61,20 +62,7 @@ def test_ppo() -> None:
     df = pd.read_csv(filename)
     logger.info(df.head())
     # Plot
-    plt.figure(figsize=(8, 8))
-    plt.subplot(2, 2, 1)
-    plt.plot(df["reward/train"].to_numpy())
-    plt.title("training rewards (average)")
-    plt.subplot(2, 2, 2)
-    plt.plot(df["step_count/train"].to_numpy())
-    plt.title("Max step count (training)")
-    plt.subplot(2, 2, 3)
-    plt.plot(df["reward_sum/eval"].to_numpy())
-    plt.title("Return (test)")
-    plt.subplot(2, 2, 4)
-    plt.plot(df["step_count/eval"].to_numpy())
-    plt.title("Max step count (test)")
-    # plt.show()
+    plot_metrics(df)
 
 
 if __name__ == "__main__":
