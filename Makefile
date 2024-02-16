@@ -17,7 +17,7 @@ export $(shell sed 's/=.*//' .env)
 LOCAL_USER:=$(shell whoami)
 LOCAL_USER_ID:=$(shell id -u)
 # project
-PROJECT_NAME:=chess-rl
+PROJECT_NAME:=shark-chess
 EXAMPLE_DIR:=./examples
 # python
 PYTHON?=python
@@ -35,6 +35,7 @@ MEMORY=8g
 SHM=4g
 CPUS=1
 DOCKER_COMMON_FLAGS=--cpus=$(CPUS) --memory=$(MEMORY) --shm-size=$(SHM) --network=host --volume $(PWD):/workdir -e LOCAL_USER_ID -e LOCAL_USER
+REGISTRY=registry.gitlab.com/svnv-svsv-jm/chess-rl
 IMAGE=$(PROJECT_NAME)
 IMAGE_PYTHON=/venv/bin/python
 
@@ -86,8 +87,13 @@ git-squash:
 # docker
 # -----------
 # linux/arm64/v8,linux/amd64
+build: TAG=latest
 build:
-	$(DOCKER) buildx build --platform linux/amd64 --load -t $(IMAGE) --build-arg PROJECT_NAME=$(PROJECT_NAME) -f $(DOCKERFILE) .
+	$(DOCKER) buildx build --platform linux/amd64 --load -t $(REGISTRY)/$(IMAGE):$(TAG) --build-arg PROJECT_NAME=$(PROJECT_NAME) -f $(DOCKERFILE) .
+
+push:
+	echo $(CI_JOB_TOKEN) | $(DOCKER) login -u $(LOCAL_USER) $(REGISTRY) --password-stdin
+	$(DOCKER) image push $(REGISTRY)/$(PROJECT_NAME):latest
 
 up: docker-compose.yml
 	@echo "DOCKER_BUILDKIT=${DOCKER_BUILDKIT}"

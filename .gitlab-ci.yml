@@ -105,3 +105,20 @@ release:
     description: 'Created using the release-cli'
     tag_name: '$TAG'
     ref: '$CI_COMMIT_SHA'
+
+# -----------
+# Container Image
+# -----------
+# We build and push the new image
+build:
+  stage: deploy
+  when: on_success
+  tags:
+    - dind
+  only:
+    - main
+  before_script:
+    - docker login -u gitlab-ci-token -p $CI_JOB_TOKEN $CI_REGISTRY
+  script:
+    - docker build -t $CI_REGISTRY_IMAGE/$PROJECT_NAME -f $DOCKERFILE .
+    - docker push $CI_REGISTRY_IMAGE/$PROJECT_NAME:latest
