@@ -1,4 +1,3 @@
-_target_: lightning.pytorch.Trainer
 enable_checkpointing: true
 accelerator: auto
 num_sanity_val_steps: 2

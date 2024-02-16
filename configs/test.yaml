@@ -13,14 +13,19 @@ defaults:
   # - override hydra/launcher: ray
   - _self_
 
+model:
+  frames_per_batch: 2
+  total_frames: 10
 trainer:
-  max_epochs: 200
+  max_steps: 3
+  val_check_interval: 1
+  log_every_n_steps: 1
 
 hydra:
   mode: MULTIRUN
   sweeper:
     direction: minimize
-    n_trials: 30
+    n_trials: 1
     n_jobs: 1
     params:
       model.n_mlp_layers: interval(2, 16)

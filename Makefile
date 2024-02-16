@@ -86,14 +86,26 @@ git-squash:
 # -----------
 # docker
 # -----------
-# linux/arm64/v8,linux/amd64
 build: TAG=latest
+build: PLATFORM=linux/amd64
+build: LOAD_PUSH=--load
 build:
-	$(DOCKER) buildx build --platform linux/amd64 --load -t $(REGISTRY)/$(IMAGE):$(TAG) --build-arg PROJECT_NAME=$(PROJECT_NAME) -f $(DOCKERFILE) .
+	$(DOCKER) buildx build --platform $(PLATFORM) $(LOAD_PUSH) -t $(REGISTRY)/$(IMAGE):$(TAG) --build-arg PROJECT_NAME=$(PROJECT_NAME) -f $(DOCKERFILE) .
+
+build-multi: PLATFORM=linux/amd64,linux/arm64
+build-multi: LOAD_PUSH=--push
+build-multi: build
 
 push:
 	echo $(CI_JOB_TOKEN) | $(DOCKER) login -u $(LOCAL_USER) $(REGISTRY) --password-stdin
 	$(DOCKER) image push $(REGISTRY)/$(PROJECT_NAME):latest
+
+bash: CONTAINER_NAME=bash
+bash:
+	$(DOCKER) run --rm -it $(DOCKER_COMMON_FLAGS) \
+		--name $(PROJECT_NAME)-$(CONTAINER_NAME) \
+		-t $(REGISTRY)/$(PROJECT_NAME) \
+		bash
 
 up: docker-compose.yml
 	@echo "DOCKER_BUILDKIT=${DOCKER_BUILDKIT}"
@@ -102,3 +114,10 @@ up: docker-compose.yml
 
 down: docker-compose.yml
 	$(DOCKER)-compose -p $(PROJECT_NAME) down --volumes
+
+
+# -----------------------------------------
+# experiments
+# -----------------------------------------
+run:
+	supervisord -c supervisord.conf

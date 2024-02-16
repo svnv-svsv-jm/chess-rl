@@ -1,5 +1,5 @@
 # train with many loggers at once
 
 defaults:
-  - tensorboard.yaml
-  - mlflow.yaml
+  - csv.yaml
+  - _self_
