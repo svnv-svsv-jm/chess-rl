@@ -21,7 +21,7 @@ ROOT = pyrootutils.setup_root(
 )
 
 
-def test_yaml_config() -> None:
+def test_yaml_config() -> float:
     """Tests we can create an experiment (model + trainer + callbacks etc.) from the Hydra config."""
     if __file__ not in sys.argv[0]:
         pytest.skip("Skipping this when running all tests.")
@@ -42,7 +42,7 @@ def test_yaml_config() -> None:
         for _, callback in cbs.items():
             assert isinstance(callback, Callback)
         # Return any number
-        return 0
+        return 0.0
 
 
 if __name__ == "__main__":
