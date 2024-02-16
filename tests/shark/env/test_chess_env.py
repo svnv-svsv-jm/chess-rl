@@ -22,7 +22,7 @@ def test_use_env_in_collector(engine_executable: str, custom: bool, use_one_hot:
         env = ChessEnv(
             engine_executable,
             device=device,
-            no_illegal_error=False,
+            lose_on_illegal_move=False,
         )
     env.set_seed(0)
     policy = RandomPolicy(env.action_spec)

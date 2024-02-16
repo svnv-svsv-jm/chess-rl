@@ -1,8 +1,23 @@
 _target_: shark.models.PPOChess
 engine_executable: stockfish
-frames_per_batch: 2
-total_frames: 10
+frame_skip: 1
+frames_per_batch: 100
+total_frames: -1
+sub_batch_size: 1
+rollout_max_steps: 1000
+lr: 0.0003
+max_grad_norm: 1.0
+gamma: 0.99
+lmbda: 0.95
+entropy_eps: 0.0001
+clip_epsilon: 0.2
 automatic_optimization: True
 n_mlp_layers: 3
+num_mlp_cells: 256
+depth: 3
+num_cells: 256
+kernel_sizes: 3
+strides: 1
+paddings: 0
 chess_env_kwargs:
   lose_on_illegal_move: False

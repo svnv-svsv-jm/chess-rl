@@ -22,7 +22,7 @@ def test_collector(engine_executable: str, builtin: bool) -> None:
         else ChessEnv(
             engine_executable,
             device=device,
-            no_illegal_error=False,
+            lose_on_illegal_move=False,
         )
     )
     env.set_seed(0)

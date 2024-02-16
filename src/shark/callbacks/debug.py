@@ -42,12 +42,7 @@ class DebugCallback(pl.Callback):
         *args: ty.Any,
     ) -> None:
         """Called before ``optimizer.zero_grad()``."""
-        try:
-            msg = "Current optimizer: "
-            for param_group in optimizer.param_groups:
-                msg += f'{type(optimizer).__name__}({param_group["name"]}) '
-        except Exception:  # pylint: disable=broad-except
-            msg = "Error in retrieving optimizer's information."
+        msg = self._get_optim_info(optimizer)
         self._log(f"Before zero grad. {msg}")
 
     def on_before_optimizer_step(
@@ -58,12 +53,7 @@ class DebugCallback(pl.Callback):
         **kwargs: ty.Any,
     ) -> None:
         """Called before ``optimizer.step()``."""
-        try:
-            msg = "Current optimizer: "
-            for param_group in optimizer.param_groups:
-                msg += f'{type(optimizer).__name__}({param_group["name"]}) '
-        except Exception:  # pylint: disable=broad-except
-            msg = "Error in retrieving optimizer's information."
+        msg = self._get_optim_info(optimizer)
         self._log(f"Before optimizer step. {msg}")
 
     def on_before_backward(
@@ -185,3 +175,12 @@ class DebugCallback(pl.Callback):
         except Exception:
             type_info = ""
         self._log(f"{stage} batch: idx={batch_idx}; batch type={type(batch)};{type_info}")
+
+    def _get_optim_info(self, optimizer: torch.optim.Optimizer) -> str:
+        try:
+            msg = "Current optimizer: "
+            for param_group in optimizer.param_groups:
+                msg += f'{type(optimizer).__name__}({param_group["name"]}) '
+        except Exception as ex:
+            msg = f"Error in retrieving optimizer's information: {ex}"
+        return msg
