@@ -26,7 +26,6 @@ def test_ppo(engine_executable: str, automatic_optimization: bool) -> None:
         frames_per_batch=2,
         total_frames=10,
         automatic_optimization=automatic_optimization,
-        use_one_hot=False,
         chess_env_kwargs=dict(lose_on_illegal_move=False),
     )
     # Try to manually run training loop
@@ -50,7 +49,7 @@ def test_ppo(engine_executable: str, automatic_optimization: bool) -> None:
         max_steps=2,
         val_check_interval=1,
         log_every_n_steps=1,
-        callbacks=DebugCallback(level="TRACE"),
+        callbacks=DebugCallback(level="DEBUG"),
         logger=CSVLogger(
             save_dir="pytest_artifacts",
             name=model.__class__.__name__,

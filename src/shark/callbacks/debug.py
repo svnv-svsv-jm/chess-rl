@@ -181,7 +181,7 @@ class DebugCallback(pl.Callback):
         stage: str,
     ) -> None:
         try:
-            type_info = f"batch content={type(batch[0])}"
-        except Exception:  # pylint: disable=broad-except
-            type_info = None
+            type_info = f" batch content={type(batch[0])}"
+        except Exception:
+            type_info = ""
         self._log(f"{stage} batch: idx={batch_idx}; batch type={type(batch)};{type_info}")

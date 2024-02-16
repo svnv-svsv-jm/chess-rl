@@ -280,12 +280,10 @@ class PPOChess(PPO):
         kernel_sizes: ty.Sequence[int | ty.Sequence[int]] | int = 3,
         strides: ty.Sequence | int = 1,
         paddings: ty.Sequence | int = 0,
-        use_one_hot: bool = True,
         chess_env_kwargs: ty.Dict[str, ty.Any] = {},
         **kwargs: ty.Any,
     ) -> None:
         """Init."""
-        self.use_one_hot = use_one_hot
         base_env = ChessEnv(engine_executable, **chess_env_kwargs)
         out_features = base_env.action_spec.shape[-1]
         if isinstance(num_cells, (float, int)):
@@ -325,12 +323,6 @@ class PPOChess(PPO):
         env = TransformedEnv(
             base_env,
             transform=Compose(
-                # FlattenObservation(
-                #     first_dim=0,
-                #     last_dim=-2 if self.use_one_hot else -1,
-                #     in_keys=self.in_keys,
-                #     allow_positive_dim=True,
-                # ),
                 StepCounter(),
             ),
         )

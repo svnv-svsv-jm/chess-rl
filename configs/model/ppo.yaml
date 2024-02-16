@@ -3,5 +3,6 @@ engine_executable: stockfish
 frames_per_batch: 2
 total_frames: 10
 automatic_optimization: True
-use_one_hot: False
 n_mlp_layers: 3
+chess_env_kwargs:
+  lose_on_illegal_move: False
