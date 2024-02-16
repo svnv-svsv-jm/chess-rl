@@ -16,6 +16,10 @@ defaults:
 model:
   frames_per_batch: 2
   total_frames: 10
+  depth: 1
+  n_mlp_layers: 1
+  num_mlp_cells: 32
+  num_cells: 32
 trainer:
   max_steps: 3
   val_check_interval: 1

@@ -18,12 +18,18 @@ def test_ppo(engine_executable: str, automatic_optimization: bool) -> None:
     """Test PPO on InvertedDoublePendulum."""
     model = PPOChess(
         engine_executable=engine_executable,
+        depth=1,
+        n_mlp_layers=1,
+        num_mlp_cells=32,
+        num_cells=32,
         frames_per_batch=2,
         total_frames=10,
         automatic_optimization=automatic_optimization,
         use_one_hot=False,
+        chess_env_kwargs=dict(lose_on_illegal_move=False),
     )
-    # Test
+    # Try to manually run training loop
+    # So we can decouple implementation from Lightning errors
     loader = model.train_dataloader()
     cfg = model.configure_optimizers()
     optimizer = cfg["optimizer"]
