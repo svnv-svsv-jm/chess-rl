@@ -12,7 +12,7 @@ def test_board_to_tensor() -> None:
     """Test we can convert a board to a tensor."""
     # Example usage
     chess_board = chess.Board()
-    state = board_to_tensor(chess_board)
+    state = board_to_tensor(chess_board, flatten=False)
     logger.info(f"State: {state.size()}")
 
 

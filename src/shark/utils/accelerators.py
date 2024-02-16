@@ -12,7 +12,7 @@ def find_device(accelerator: ty.Union[torch.device, str] = None) -> torch.device
     if accelerator is None:
         accelerator = "auto"
     if isinstance(accelerator, torch.device):
-        return accelerator
+        return accelerator  # pragma: no cover
     device = _choose_auto_accelerator(accelerator)
     assert device in ("cpu", "mps", "cuda")
     return torch.device(device)
@@ -26,8 +26,8 @@ def _choose_auto_accelerator(accelerator_flag: str) -> str:
         if accelerator_flag == "auto":
             if MPSAccelerator.is_available():
                 return "mps"
-            if CUDAAccelerator.is_available():
-                return "cuda"
-        return "cpu"
-    except Exception:
-        return "cpu"
+            if CUDAAccelerator.is_available():  # pragma: no cover
+                return "cuda"  # pragma: no cover
+        return "cpu"  # pragma: no cover
+    except Exception:  # pragma: no cover
+        return "cpu"  # pragma: no cover

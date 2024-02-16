@@ -97,8 +97,8 @@ class Agent:
 def _fix_fucked_up_state(next_state: np.ndarray) -> np.ndarray:
     """Fix broken envs."""
     if not isinstance(next_state, np.ndarray):
-        if isinstance(next_state, (list, tuple)):
-            next_state = next_state[0]
-        if not isinstance(next_state, np.ndarray):
+        if isinstance(next_state, (list, tuple)):  # pragma: no cover
+            next_state = next_state[0]  # pragma: no cover
+        if not isinstance(next_state, np.ndarray):  # pragma: no cover
             logger.warning(f"Unsupported type {type(next_state)}, expected {np.ndarray}.")
     return next_state

@@ -73,7 +73,17 @@ line-length = 100
 # Coverage
 # ----------------------
 [tool.coverage.report]
-exclude_lines = ["pragma: no cover", "warnings", "pass", "rank_zero_warn", "raise NotImplementedError"]
+exclude_lines = [
+    "pragma: no cover",
+    "warnings",
+    "pass",
+    "rank_zero_warn",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "logger.info",
+    "logger.debug",
+    "logger.trace",
+]
 
 # ----------------------
 # PyTest

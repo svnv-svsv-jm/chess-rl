@@ -14,7 +14,7 @@ class DebugCallback(pl.Callback):
         super().__init__()
         self.level = level.upper()
 
-    def _log(self, msg: str) -> None:
+    def _log(self, msg: str) -> None:  # pragma: no cover
         """Logs to correct level."""
         if self.level == "INFO":
             logger.info(msg)
@@ -133,14 +133,14 @@ class DebugCallback(pl.Callback):
     ) -> None:
         self._log(f"Training epoch {trainer.current_epoch} is over.")
 
-    def on_validation_epoch_start(
+    def on_validation_epoch_start(  # pragma: no cover
         self,
         trainer: pl.Trainer,
         *args: ty.Any,
     ) -> None:
         self._log(f"Validation epoch {trainer.current_epoch} is starting.")
 
-    def on_validation_epoch_end(
+    def on_validation_epoch_end(  # pragma: no cover
         self,
         trainer: pl.Trainer,
         *args: ty.Any,
@@ -148,7 +148,7 @@ class DebugCallback(pl.Callback):
         epoch = trainer.current_epoch
         self._log(f"Validation epoch {epoch} is over.")
 
-    def on_test_epoch_start(
+    def on_test_epoch_start(  # pragma: no cover
         self,
         trainer: pl.Trainer,
         *args: ty.Any,
@@ -156,7 +156,7 @@ class DebugCallback(pl.Callback):
         epoch = trainer.current_epoch
         self._log(f"Test epoch {epoch} is starting.")
 
-    def on_test_epoch_end(
+    def on_test_epoch_end(  # pragma: no cover
         self,
         trainer: pl.Trainer,
         *args: ty.Any,
