@@ -10,6 +10,7 @@ from chess.engine import SimpleEngine, PovScore
 import torch
 from torch import Tensor
 import random
+from pathlib import Path
 
 from tensordict import TensorDict, TensorDictBase
 from torchrl.data import (
@@ -99,6 +100,7 @@ class ChessEnv(EnvBase):
         self.softmax = softmax
         if engine_path is None:
             engine_path = os.environ.get("CHESS_ENGINE_EXECUTABLE", "stockfish")
+        assert Path(engine_path).exists(), f"Chess engine not found at {engine_path}."
         self.engine_path = engine_path
         self.time = time
         self.depth = depth
