@@ -12,7 +12,7 @@ variables:
 # Testing
 # -----------
 # PyTest
-pytest-python:
+pytest:
   parallel:
     matrix:
       - IMAGE: ['python:3.10.10']

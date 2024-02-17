@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "shark-chess"
-version = "0.0.1"
+version = "0.1.0"
 description = "Reinforcement Learning for Chess."
 authors = ["Gianmarco <janmail1990@gmail.com>"]
 license = "LICENSE"
