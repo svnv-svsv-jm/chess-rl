@@ -33,6 +33,8 @@ pytest:
     - export CHESS_ENGINE_EXECUTABLE="/usr/games/stockfish"
     - chmod 777 "$CHESS_ENGINE_EXECUTABLE"
     - make test
+  coverage: '/(?i)total.*? (100(?:\.0+)?\%|[1-9]?\d(?:\.\d+)?\%)$/'
+  interruptible: true
 
 # -----------
 # Automatic
