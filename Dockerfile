@@ -22,7 +22,7 @@ RUN pip install --upgrade pip virtualenv &&\
     virtualenv /venv &&\
     source /venv/bin/activate &&\
     make install &&\
-    chmod 777 /venv
+    chmod -R 777 /venv
 
 # TensorBoard
 EXPOSE 6006
