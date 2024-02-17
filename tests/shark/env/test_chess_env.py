@@ -12,7 +12,7 @@ from shark.env import ChessEnv
 from shark.utils import find_device
 
 
-@pytest.mark.parametrize("custom, from_engine", [(True, None), (False, False), (False, True)])
+@pytest.mark.parametrize("custom, from_engine", [(True, True), (False, False), (False, True)])
 def test_use_env_in_collector(engine_executable: str, custom: bool, from_engine: bool) -> None:
     """Test `SyncDataCollector` on env."""
     device = find_device()
