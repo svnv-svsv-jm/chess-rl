@@ -1,0 +1,5 @@
+defaults:
+  - lr_monitor.yaml
+  - model_summary.yaml
+  - debug.yaml
+  - _self_
