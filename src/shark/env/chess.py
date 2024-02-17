@@ -52,6 +52,7 @@ class ChessEnv(EnvBase):
         illegal_amplifier: float = 1000,
         lose_on_illegal_move: bool = True,
         use_one_hot: bool = True,
+        from_engine: bool = False,
         **kwargs: ty.Any,
     ) -> None:
         """
@@ -91,6 +92,9 @@ class ChessEnv(EnvBase):
 
             use_one_hot (bool, optional):
                 Whether to use one-hot vectors for state. Defaults to `True`.
+
+            from_engine (bool, optional):
+                Whetehr to sample moves from engine or random.
         """
         super().__init__(**kwargs)  # call the constructor of the base class
         # Chess
@@ -98,6 +102,7 @@ class ChessEnv(EnvBase):
         self.illegal_amplifier = illegal_amplifier
         self.worst_reward = worst_reward
         self.softmax = softmax
+        self.from_engine = from_engine
         if engine_path is None:
             engine_path = os.environ.get("CHESS_ENGINE_EXECUTABLE", "stockfish")
         assert Path(engine_path).exists(), f"Chess engine not found at {engine_path}."
@@ -308,8 +313,10 @@ class ChessEnv(EnvBase):
         logger.trace(f"Returning new TensorDict: {td}")
         return td
 
-    def sample(self, from_engine: bool = False) -> ty.Optional[TensorDict]:
+    def sample(self, from_engine: bool = None) -> ty.Optional[TensorDict]:
         """Sample a legal move."""
+        if from_engine is None:
+            from_engine = self.from_engine
         if from_engine:
             # Get move rom engine
             with SimpleEngine.popen_uci(self.engine_path) as engine:

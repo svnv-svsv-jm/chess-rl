@@ -12,8 +12,8 @@ from shark.env import ChessEnv
 from shark.utils import find_device
 
 
-@pytest.mark.parametrize("custom, use_one_hot", [(True, None), (False, False), (False, True)])
-def test_use_env_in_collector(engine_executable: str, custom: bool, use_one_hot: bool) -> None:
+@pytest.mark.parametrize("custom, from_engine", [(True, None), (False, False), (False, True)])
+def test_use_env_in_collector(engine_executable: str, custom: bool, from_engine: bool) -> None:
     """Test `SyncDataCollector` on env."""
     device = find_device()
     if custom:
@@ -23,6 +23,7 @@ def test_use_env_in_collector(engine_executable: str, custom: bool, use_one_hot:
             engine_executable,
             device=device,
             lose_on_illegal_move=False,
+            from_engine=from_engine,
         )
     env.set_seed(0)
     policy = RandomPolicy(env.action_spec)
