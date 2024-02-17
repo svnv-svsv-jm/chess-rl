@@ -1,5 +1,4 @@
 _target_: shark.models.PPOChess
-engine_executable: stockfish
 frame_skip: 1
 frames_per_batch: 100
 total_frames: -1
