@@ -5,23 +5,23 @@ x-common-variables: &common-variables
   LOCAL_USER: ${LOCAL_USER}
 
 services:
-  app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      network: host
-      platforms:
-        - linux/amd64
-        # - linux/arm64/v8
-    network_mode: host
-    entrypoint: /workdir/scripts/entrypoint.sh
-    command: tail -f /dev/null
-    volumes:
-      - ./:/workdir
-    environment:
-      <<: *common-variables
-      COMPOSE_DOCKER_CLI_BUILD: 1
-      DOCKER_BUILDKIT: 1
+  # app:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile
+  #     network: host
+  #     platforms:
+  #       - linux/amd64
+  #       # - linux/arm64/v8
+  #   network_mode: host
+  #   entrypoint: /workdir/scripts/entrypoint.sh
+  #   command: tail -f /dev/null
+  #   volumes:
+  #     - ./:/workdir
+  #   environment:
+  #     <<: *common-variables
+  #     COMPOSE_DOCKER_CLI_BUILD: 1
+  #     DOCKER_BUILDKIT: 1
 
   # dev-container:
   #   image: ${IMAGE}
@@ -74,17 +74,17 @@ services:
   #         cpus: 1
   #         memory: 8G
 
-  # mlflow:
-  #   image: ${IMAGE}
-  #   container_name: mlflow-${UNIQUE-0}
-  #   command: bash -c "source /${PROJECT_NAME}/bin/activate && mlflow ui --host 0.0.0.0 --port 5000 --backend-store-uri ${MLFLOW_BACKEND_STORE_URI}"
-  #   ports:
-  #     - ${PORT_MLFLOW-5002}:5000 #server:container
-  #   volumes:
-  #     - ./:/workdir
-  #   environment: *common-variables
-  #   deploy:
-  #     resources:
-  #       limits:
-  #         cpus: 1
-  #         memory: 8G
+  mlflow:
+    image: ghcr.io/mlflow/mlflow
+    container_name: mlflow
+    command: mlflow ui --host 0.0.0.0 --port 5000 --backend-store-uri ${MLFLOW_BACKEND_STORE_URI}
+    ports:
+      - ${PORT_MLFLOW-5002}:5000 #server:container
+    volumes:
+      - ./:/workdir
+    environment: *common-variables
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 8G

@@ -3,4 +3,5 @@
 defaults:
   - csv.yaml
   - mlflow.yaml
+  - tensorboard.yaml
   - _self_

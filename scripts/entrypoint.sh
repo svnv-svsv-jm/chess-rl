@@ -37,7 +37,7 @@ else
     sudo -H -u $USER bash -c "$INSTALL_PROJECT"
 fi
 
-apt-get update -qy
-apt-get install -y apt-utils gosu
+# apt-get update -qy
+# apt-get install -y apt-utils gosu
 
 exec gosu $USER "$@"

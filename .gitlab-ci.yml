@@ -15,7 +15,7 @@ variables:
 pytest:
   parallel:
     matrix:
-      - IMAGE: ['python:3.10.10']
+      - IMAGE: ['python:3.10']
   image: $IMAGE
   stage: test
   only:
