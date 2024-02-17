@@ -21,7 +21,8 @@ RUN apt-get update --fix-missing -qy &&\
 RUN pip install --upgrade pip virtualenv &&\
     virtualenv /venv &&\
     source /venv/bin/activate &&\
-    make install
+    make install &&\
+    chmod 777 /venv
 
 # TensorBoard
 EXPOSE 6006

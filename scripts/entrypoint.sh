@@ -15,7 +15,7 @@ echo "USER: $USER -- UID: $USER_ID"
 # umask 022 # by default, all newly created files have open permissions
 VENV=/venv
 ACTIVATE="source $VENV/bin/activate"
-INSTALL_PROJECT="$ACTIVATE " #&& poetry install -q"
+INSTALL_PROJECT="$ACTIVATE && poetry install"
 
 # If $USER is empty, pretend to be root
 if [[ $USER = "" ]] || [[ -z $USER ]]; then

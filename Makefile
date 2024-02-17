@@ -131,13 +131,11 @@ run:
 	supervisord -c supervisord.conf
 
 # [DO NOT CALL THIS COMMAND]
-exp-base: CONFIG=
 exp-base: RANDOM=$(shell bash -c 'echo $$RANDOM')
 exp-base: CONTAINER_NAME=exp-$(CONFIG)-$(RANDOM)
 exp-base: SCRIPT=experiments/main.py
 exp-base: PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512
-exp-base: DOCKER_FLAGS=
-exp-base: OVERRIDE=
+exp-base: DOCKER_FLAGS=-d
 exp-base: NOW=$(shell date '+%Y-%m-%d_%H:%M:%S')
 exp-base: CMD=$(IMAGE_PYTHON) -u /workdir/$(SCRIPT) --config-name $(CONFIG) $(OVERRIDE)
 exp-base:
@@ -151,5 +149,6 @@ exp: CONFIG=main.yaml
 exp: exp-base
 
 # exp-gpu: GPU_FLAGS=--runtime=nvidia --gpus all
+exp-gpu: CONFIG=main.yaml
 exp-gpu: GPU_FLAGS=--gpus all
 exp-gpu: exp-base
