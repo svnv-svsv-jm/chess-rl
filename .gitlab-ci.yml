@@ -45,9 +45,15 @@ update-main:
   # stage: deploy
   only:
     - develop
+  before_script:
+    # Clone the repository via HTTPS inside a new directory
+    - git clone "https://${GITLAB_USERNAME}:${GITLAB_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git" "${CI_COMMIT_SHA}"
+    # Set the displayed user with the commits that are about to be made
+    - git config --global user.email "${GIT_USER_EMAIL:-$GITLAB_USER_EMAIL}"
+    - git config --global user.name "${GIT_USER_NAME:-$GITLAB_USER_NAME}"
   script:
-    - git config --global user.email janmail1990@gmail.com
-    - git config --global user.name svnv-svsv-jm
+    # Go to the new directory
+    - cd "${CI_COMMIT_SHA}"
     - git fetch origin
     - git checkout $MAIN_BRANCH
     - git pull --allow-unrelated-histories
