@@ -175,8 +175,8 @@ class DQN(pl.LightningModule):
             try:
                 self.target_net.load_state_dict(self.net.state_dict())
             except RuntimeError as ex:
-                logger.warning(ex)
-                self.target_net = copy.deepcopy(self.net)
+                logger.warning(ex)  # pragma: no cover
+                self.target_net = copy.deepcopy(self.net)  # pragma: no cover
 
         self.log_dict(
             {

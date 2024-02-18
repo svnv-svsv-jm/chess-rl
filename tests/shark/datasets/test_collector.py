@@ -38,6 +38,8 @@ def test_collector(engine_executable: str, builtin: bool) -> None:
         assert isinstance(td, TensorDict)
         if i > 2:
             break
+    td = collector.sample()
+    logger.info(f"Sample:\n{td}")
 
 
 if __name__ == "__main__":

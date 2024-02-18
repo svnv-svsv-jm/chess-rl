@@ -93,7 +93,7 @@ class DebugCallback(pl.Callback):
             if isinstance(loss, torch.Tensor):
                 self._log(f"Loss with value {loss} on device {loss.device}.")
 
-    def on_validation_batch_start(  # type: ignore
+    def on_validation_batch_start(  # type: ignore # pragma: no cover
         self,
         trainer: pl.Trainer,
         pl_module: pl.LightningModule,
@@ -103,7 +103,7 @@ class DebugCallback(pl.Callback):
     ) -> None:
         self._batch_type_info(batch, batch_idx, "Validation")
 
-    def on_validation_batch_end(  # type: ignore
+    def on_validation_batch_end(  # type: ignore # pragma: no cover
         self,
         trainer: pl.Trainer,
         pl_module: pl.LightningModule,
