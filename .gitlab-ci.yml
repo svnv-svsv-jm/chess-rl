@@ -42,7 +42,7 @@ pytest:
 # -----------
 # Automatically try to push to `main` branch
 update-main:
-  stage: deploy
+  # stage: deploy
   only:
     - develop
   before_script:
@@ -58,24 +58,8 @@ update-main:
     - git checkout $MAIN_BRANCH
     - git pull --allow-unrelated-histories
     - git merge origin/develop --allow-unrelated-histories
+    - git remote set-url --add --push origin https://svnv-svsv-jm:${GITHUB_TOKEN}@github.com/svnv-svsv-jm/chess-rl.git
     - git push origin $MAIN_BRANCH
-# update-main:
-#   # stage: deploy
-#   before_script:
-#     - 'which ssh-agent || ( apt-get update -y && apt-get install openssh-client -y )'
-#     - eval $(ssh-agent -s)
-#     - ssh-add <(echo "$GIT_SSH_PRIV_KEY")
-#     - git config --global user.name "svnv-svsv-jm"
-#     - git config --global user.email "janmail1990@gmail.com"
-#     - mkdir -p ~/.ssh
-#     - ssh-keyscan gitlab.com >> gitlab-known-hosts
-#     - cat gitlab-known-hosts >> ~/.ssh/known_hosts
-#   script:
-#     - git clone git@gitlab.com:EsmailELBoBDev2/SimplyTranslate-Web.git ST 
-#     - cd ST
-#     - git checkout txtarea-patch
-#     - git merge master
-#     - git push origin txtarea-patch
 
 # -----------
 # Release
