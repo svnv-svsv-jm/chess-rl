@@ -48,7 +48,8 @@ update-main:
   script:
     - git fetch origin
     - git checkout $MAIN_BRANCH
-    - git merge origin/develop
+    - git pull --allow-unrelated-histories
+    - git merge origin/develop --allow-unrelated-histories
     - git push origin $MAIN_BRANCH
 # update-main:
 #   # stage: deploy
