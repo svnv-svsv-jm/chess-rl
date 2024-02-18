@@ -5,7 +5,7 @@ import pandas as pd
 import os
 
 
-def plot_metrics(df: pd.DataFrame) -> None:
+def plot_metrics(df: pd.DataFrame, show: bool = False) -> None:
     """Cool plot.
 
     Args:
@@ -26,4 +26,5 @@ def plot_metrics(df: pd.DataFrame) -> None:
     plt.plot(df["step_count/eval"].to_numpy())
     plt.title("Max step count (test)")
     plt.savefig(os.path.join("pytest_artifacts", "metrics.png"))
-    # plt.show()
+    if show:
+        plt.show()
