@@ -4,9 +4,10 @@ from loguru import logger
 import typing as ty
 
 import lightning.pytorch as pl
-from lightning.fabric.utilities.types import LRScheduler
+import lightning.pytorch.callbacks as cb
 from lightning.pytorch.utilities.types import OptimizerLRSchedulerConfig, LRSchedulerConfigType
 from lightning.pytorch.core.optimizer import LightningOptimizer
+from lightning.fabric.utilities.types import LRScheduler
 import torch
 from torch import Tensor
 from tensordict import TensorDict
@@ -42,8 +43,7 @@ class BaseRL(pl.LightningModule):
         rollout_max_steps: int = 1000,
         automatic_optimization: bool = True,
     ) -> None:
-        """_summary_
-
+        """
         Args:
             env (ty.Union[str, EnvBase]): _description_
             loss_module (TensorDictModule): _description_
@@ -136,6 +136,20 @@ class BaseRL(pl.LightningModule):
     def train_dataloader(self) -> ty.Iterable[TensorDict]:
         """Create DataLoader for training."""
         return self.dataset
+
+    def configure_callbacks(self) -> ty.Sequence[pl.Callback]:
+        """Configure checkpoint."""
+        callbacks = []
+        if self.checkpoint_callback:
+            ckpt_cb = cb.ModelCheckpoint(
+                monitor="loss/train",
+                mode="min",
+                save_top_k=3,
+                save_last=True,
+                save_on_train_epoch_end=True,
+            )
+            callbacks.append(ckpt_cb)
+        return callbacks
 
     def configure_optimizers(self) -> OptimizerLRSchedulerConfig:
         """Configures the optimizer (`torch.optim.Adam`) and the learning rate scheduler (`torch.optim.lr_scheduler.CosineAnnealingLR`)."""
