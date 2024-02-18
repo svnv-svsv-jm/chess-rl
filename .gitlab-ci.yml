@@ -42,7 +42,7 @@ pytest:
 # -----------
 # Automatically try to push to `main` branch
 update-main:
-  # stage: deploy
+  stage: deploy
   only:
     - develop
   before_script:
