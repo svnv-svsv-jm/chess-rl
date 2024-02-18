@@ -20,9 +20,9 @@ x-nvidia-runtime: &nvidia-runtime
         devices:
           - driver: nvidia
             capabilities: [gpu]
-            device_ids: ["1"]
+            device_ids: ["0"]
       limits:
-        cpus: 1
+        cpus: "1"
         memory: 8G
 
 services:
