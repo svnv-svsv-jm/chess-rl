@@ -23,6 +23,10 @@ jobs:
 
       - name: Install dependencies and test
         run: |
+          pip install --upgrade pip
+          pip install virtualenv
+          virtualenv venv
+          source venv/bin/activate
           brew install stockfish
           export CHESS_ENGINE_EXECUTABLE=$(which stockfish)
           make install
