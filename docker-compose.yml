@@ -4,82 +4,107 @@ x-common-variables: &common-variables
   LOCAL_USER_ID: ${LOCAL_USER_ID}
   LOCAL_USER: ${LOCAL_USER}
 
+x-image-build: &image-build
+  context: .
+  dockerfile: Dockerfile
+  network: host
+  platforms:
+    - linux/amd64
+    # - linux/arm64/v8
+
+x-nvidia-runtime: &nvidia-runtime
+  runtime: nvidia
+  deploy:
+    resources:
+      reservations:
+        devices:
+          - driver: nvidia
+            capabilities: [gpu]
+            device_ids: ["1"]
+      limits:
+        cpus: 1
+        memory: 8G
+
 services:
-  # app:
-  #   build:
-  #     context: .
-  #     dockerfile: Dockerfile
-  #     network: host
-  #     platforms:
-  #       - linux/amd64
-  #       # - linux/arm64/v8
-  #   network_mode: host
-  #   entrypoint: /workdir/scripts/entrypoint.sh
-  #   command: tail -f /dev/null
-  #   volumes:
-  #     - ./:/workdir
-  #   environment:
-  #     <<: *common-variables
-  #     COMPOSE_DOCKER_CLI_BUILD: 1
-  #     DOCKER_BUILDKIT: 1
+  app:
+    build:
+      <<: *image-build
+    network_mode: host
+    entrypoint: /workdir/scripts/entrypoint.sh
+    command: tail -f /dev/null
+    volumes:
+      - ./:/workdir
+    environment:
+      <<: *common-variables
+      COMPOSE_DOCKER_CLI_BUILD: 1
+      DOCKER_BUILDKIT: 1
 
-  # dev-container:
-  #   image: ${IMAGE}
-  #   container_name: dev-container-${UNIQUE-0}
-  #   entrypoint: /workdir/scripts/entrypoint.sh
-  #   # Overrides default command so things don't shut down after the process ends.
-  #   command: /bin/sh -c "while sleep 1000; do :; done"
-  #   volumes:
-  #     - ./:/workdir
-  #   ports: #server:container
-  #     - 7502:7502
-  #   environment:
-  #     <<: *common-variables
+  dev-container:
+    image: ${IMAGE}
+    container_name: dev-container-${UNIQUE-0}
+    entrypoint: /workdir/scripts/entrypoint.sh
+    # Overrides default command so things don't shut down after the process ends.
+    command: /bin/sh -c "while sleep 1000; do :; done"
+    volumes:
+      - ./:/workdir
+    ports: #server:container
+      - 7502:7502
+    environment:
+      <<: *common-variables
 
-  # notebook:
-  #   image: ${IMAGE}
-  #   container_name: notebook-${UNIQUE-0}
-  #   entrypoint: /workdir/scripts/entrypoint.sh
-  #   command: /${PROJECT_NAME}/bin/python -m jupyter notebook --ip=0.0.0.0 --port=8888 --no-browser --allow-root --NotebookApp.token='' --NotebookApp.password=''
-  #   ports: #server:container
-  #     - ${PORT_JUPY-8888}:8888
-  #   volumes:
-  #     - ./:/workdir
-  #   environment:
-  #     <<: *common-variables
-  #   runtime: nvidia
-  #   deploy:
-  #     resources:
-  #       reservations:
-  #         devices:
-  #           - driver: nvidia
-  #             capabilities: [gpu]
-  #             device_ids: ["1"]
-  #       limits:
-  #         cpus: 1
-  #         memory: 8G
+  trainer:
+    image: ${IMAGE}
+    container_name: trainer-${UNIQUE-0}
+    entrypoint: /workdir/scripts/entrypoint.sh
+    command: make exp
+    volumes:
+      - ./:/workdir
+    environment:
+      <<: *common-variables
 
-  # tensorboard:
-  #   image: ${IMAGE}
-  #   container_name: tensorboard-${UNIQUE-0}
-  #   command: /${PROJECT_NAME}/bin/tensorboard --logdir=. --port=6006 --host 0.0.0.0
-  #   ports:
-  #     - ${PORT_TB-6007}:6006 #server:container
-  #   volumes:
-  #     - ./:/workdir
-  #   environment: *common-variables
-  #   deploy:
-  #     resources:
-  #       limits:
-  #         cpus: 1
-  #         memory: 8G
+  trainer-gpu:
+    build:
+      <<: *image-build
+    container_name: trainer-gpu-${UNIQUE-0}
+    entrypoint: /workdir/scripts/entrypoint.sh
+    command: make exp-gpu
+    volumes:
+      - ./:/workdir
+    environment:
+      <<: *common-variables
+    <<: *nvidia-runtime
+
+  notebook:
+    image: ${IMAGE}
+    container_name: notebook-${UNIQUE-0}
+    entrypoint: /workdir/scripts/entrypoint.sh
+    command: /${PROJECT_NAME}/bin/python -m jupyter notebook --ip=0.0.0.0 --port=8888 --no-browser --allow-root --NotebookApp.token='' --NotebookApp.password=''
+    ports: #server:container
+      - 8888:8888
+    volumes:
+      - ./:/workdir
+    environment:
+      <<: *common-variables
+
+  notebook-gpu:
+    image: ${IMAGE}
+    container_name: notebook-${UNIQUE-0}
+    entrypoint: /workdir/scripts/entrypoint.sh
+    command: /${PROJECT_NAME}/bin/python -m jupyter notebook --ip=0.0.0.0 --port=8888 --no-browser --allow-root --NotebookApp.token='' --NotebookApp.password=''
+    ports: #server:container
+      - 8889:8888
+    volumes:
+      - ./:/workdir
+    environment:
+      <<: *common-variables
+    <<: *nvidia-runtime
 
   mlflow:
     image: ghcr.io/mlflow/mlflow
     container_name: mlflow
     command: mlflow ui --host 0.0.0.0 --port 5000 --backend-store-uri ${MLFLOW_BACKEND_STORE_URI}
     ports:
-      - ${PORT_MLFLOW-5002}:5000 #server:container
+      - 5000:5000 #server:container
     volumes:
       - ./:/workdir
     environment: *common-variables

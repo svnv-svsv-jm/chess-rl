@@ -111,14 +111,14 @@ bash:
 		-t $(REGISTRY)/$(PROJECT_NAME) \
 		bash
 
-up: FLAGS=
 up: docker-compose.yml
-	@echo "DOCKER_BUILDKIT=${DOCKER_BUILDKIT}"
-	@echo "COMPOSE_DOCKER_CLI_BUILD=${COMPOSE_DOCKER_CLI_BUILD}"
-	docker-compose -p $(PROJECT_NAME) up -d $(FLAGS)
+	docker-compose $(DOCKER_COMPOSE_CONTEXT) -p $(PROJECT_NAME) up -d $(SERVICES) $(RECREATE)
 
-up-force: FLAGS=--build --force-recreate
+up-force: RECREATE=--build --force-recreate
 up-force: up
+
+up-remote: DOCKER_COMPOSE_CONTEXT=--context remote
+up-remote: up
 
 down: docker-compose.yml
 	$(DOCKER)-compose -p $(PROJECT_NAME) down --volumes
@@ -145,10 +145,12 @@ exp-base:
 		-t $(REGISTRY)/$(PROJECT_NAME) \
 		$(CMD)
 
+# Run experiment
 exp: CONFIG=main.yaml
 exp: exp-base
 
+# Run experiment with NVIDIA runtime
 # exp-gpu: GPU_FLAGS=--runtime=nvidia --gpus all
-exp-gpu: CONFIG=main.yaml
 exp-gpu: GPU_FLAGS=--gpus all
+exp-gpu: CONFIG=main.yaml
 exp-gpu: exp-base
