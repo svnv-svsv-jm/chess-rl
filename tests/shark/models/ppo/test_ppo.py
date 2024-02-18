@@ -15,14 +15,14 @@ from shark.utils import plot_metrics
 def test_ppo() -> None:
     """Test PPO on InvertedDoublePendulum."""
     frame_skip = 1
-    frames_per_batch = frame_skip * 10
+    frames_per_batch = frame_skip * 5
     total_frames = 100
     model = PPOPendulum(
         env="InvertedDoublePendulum-v4",
         frame_skip=frame_skip,
         frames_per_batch=frames_per_batch,
         total_frames=total_frames,
-        n_mlp_layers=7,
+        n_mlp_layers=4,
     )
     # Rollout
     rollout = model.env.rollout(3)
@@ -40,10 +40,11 @@ def test_ppo() -> None:
         assert batch_size == int(frames_per_batch // frame_skip)
         break
     # Training
+    max_steps = 2
     trainer = pl.Trainer(
         accelerator="cpu",
-        max_steps=10,
-        val_check_interval=5,
+        max_steps=max_steps,
+        val_check_interval=2,
         log_every_n_steps=1,
         logger=CSVLogger(
             save_dir="pytest_artifacts",
@@ -51,6 +52,7 @@ def test_ppo() -> None:
         ),
     )
     trainer.fit(model)
+    assert max_steps >= trainer.global_step
     # Get logged stuff
     log_dir = trainer.log_dir
     assert isinstance(log_dir, str)

@@ -42,6 +42,7 @@ class BaseRL(pl.LightningModule):
         lr_monitor_strict: bool = False,
         rollout_max_steps: int = 1000,
         automatic_optimization: bool = True,
+        use_checkpoint_callback: bool = True,
         save_every_n_train_steps: int = 100,
     ) -> None:
         """
@@ -74,6 +75,7 @@ class BaseRL(pl.LightningModule):
                 "value_module",
             ]
         )
+        self.use_checkpoint_callback = use_checkpoint_callback
         self.save_every_n_train_steps = save_every_n_train_steps
         self.max_grad_norm = max_grad_norm
         self.lr = lr
@@ -142,7 +144,7 @@ class BaseRL(pl.LightningModule):
     def configure_callbacks(self) -> ty.Sequence[pl.Callback]:
         """Configure checkpoint."""
         callbacks = []
-        if self.checkpoint_callback:
+        if self.use_checkpoint_callback:
             ckpt_cb = cb.ModelCheckpoint(
                 monitor="loss/train",
                 mode="min",
@@ -190,23 +192,28 @@ class BaseRL(pl.LightningModule):
         # Return loss
         return loss
 
-    def on_train_epoch_end(self) -> None:
+    def on_train_batch_end(
+        self,
+        outputs: Tensor | ty.Mapping[str, ty.Any] | None,
+        batch: ty.Any,
+        batch_idx: int,
+    ) -> None:
         """Check if we have to stop. For some reason, Lightning can't understand this. Probably because we are using an `IterableDataset`."""
         # Stop on max steps
         global_step = self.trainer.global_step
         max_steps = self.trainer.max_steps
-        if global_step > max_steps:
-            self.stop("global_step > max_steps")
+        if global_step >= max_steps:
+            self.stop(f"global_step={global_step} > max_steps={max_steps}")
             return
         # Stop on max epochs
         current_epoch = self.trainer.current_epoch
         max_epochs = self.trainer.max_epochs
-        if isinstance(max_epochs, int) and current_epoch > max_epochs:
-            self.stop("current_epoch > max_epochs")
+        if isinstance(max_epochs, int) and max_epochs > 0 and current_epoch >= max_epochs:
+            self.stop(f"current_epoch={current_epoch} > max_epochs={max_epochs}")
             return
         # Stop on total frames
-        if global_step > self.total_frames:
-            self.stop("global_step > total_frames")
+        if global_step >= self.total_frames:
+            self.stop(f"global_step={global_step} > total_frames={self.total_frames}")
             return
 
     def stop(self, msg: str = "") -> None:
