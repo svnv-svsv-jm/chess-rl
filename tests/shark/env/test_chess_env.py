@@ -50,6 +50,7 @@ def test_chess_env(engine_executable: str, use_one_hot: bool) -> None:
         engine_path=engine_executable,
         play_as="black",
         device=find_device(),
+        use_one_hot=use_one_hot,
     )
     # Reset
     state = env.reset()
@@ -63,6 +64,9 @@ def test_chess_env(engine_executable: str, use_one_hot: bool) -> None:
     logger.info(f"Rollout: {td}")
     # Sanity check
     check_env_specs(env)
+    # Sample
+    env.sample(from_engine=False)
+    env.sample(from_engine=True)
 
 
 if __name__ == "__main__":
