@@ -48,7 +48,7 @@ update-main:
   script:
     - git fetch origin
     - git checkout $MAIN_BRANCH
-    - git merge develop
+    - git merge origin/develop
     - git push origin $MAIN_BRANCH
 # update-main:
 #   # stage: deploy
