@@ -90,7 +90,6 @@ prepare-release:
     - tags
     # - merge_requests # for debug
   script:
-    - bash scripts/install-system-packages.sh
     - make install
     - PACKAGE_VERSION=$(poetry run python -c "import pkg_resources; print(pkg_resources.get_distribution('$PROJECT_NAME').version)")
     - echo "PACKAGE_VERSION=$PACKAGE_VERSION" >> variables.env
@@ -141,10 +140,11 @@ release:
 # -----------
 # We build and push the new image
 build:
+  image: docker:20.10.16
+  services:
+    - docker:20.10.16-dind
   stage: deploy
   when: on_success
-  tags:
-    - dind
   only:
     - main
   before_script:
