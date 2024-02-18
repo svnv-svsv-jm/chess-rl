@@ -23,8 +23,10 @@ jobs:
 
       - name: Install dependencies and test
         run: |
+          brew install stockfish
+          export CHESS_ENGINE_EXECUTABLE=$(which stockfish)
           make install
-          make tests
+          make test
 
       - name: Push to master if tests pass
         if: success()
