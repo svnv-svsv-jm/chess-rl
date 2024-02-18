@@ -138,20 +138,21 @@ class ChessEnv(EnvBase):
                 dtype=torch.float32,
             )
         else:
-            # Action is a one-hot tensor
-            self.action_spec = DiscreteTensorSpec(
-                n=self.n_actions,
-                shape=(),
-                device=self.device,
-                dtype=torch.float32,
-            )
-            # Observation space
-            self._state = DiscreteTensorSpec(
-                n=self.n_states,
-                shape=(8, 8),
-                device=self.device,
-                dtype=torch.float32,
-            )
+            raise NotImplementedError("You must use one-hot vectors.")
+            # # Action is a one-hot tensor
+            # self.action_spec = DiscreteTensorSpec(
+            #     n=self.n_actions,
+            #     shape=(),
+            #     device=self.device,
+            #     dtype=torch.float32,
+            # )
+            # # Observation space
+            # self._state = DiscreteTensorSpec(
+            #     n=self.n_states,
+            #     shape=(8, 8),
+            #     device=self.device,
+            #     dtype=torch.float32,
+            # )
         self.observation_spec = CompositeSpec(observation=self._state)
         # Unlimited reward space
         self.reward_spec = UnboundedContinuousTensorSpec(

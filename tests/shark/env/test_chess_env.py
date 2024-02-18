@@ -42,7 +42,7 @@ def test_use_env_in_collector(engine_executable: str, custom: bool, from_engine:
     logger.success(f"Passed for {env.__class__.__name__}")
 
 
-@pytest.mark.parametrize("use_one_hot", [False, True])
+@pytest.mark.parametrize("use_one_hot", [True])
 def test_chess_env(engine_executable: str, use_one_hot: bool) -> None:
     """Test we can initialize the chess environment."""
     # Create env
