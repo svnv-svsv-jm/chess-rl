@@ -63,7 +63,7 @@ def _load_and_run(cfg: DictConfig = None) -> ty.Optional[float]:
             )
     assert cfg is not None
     # Get model and trainer
-    model, trainer = init_experiment(cfg, raise_error_on_hydra_shit=False)
+    model, trainer = init_experiment(cfg, raise_error_on_hydra_shit=True)
     assert isinstance(model, PPOChess)
     assert isinstance(trainer, pl.Trainer)
     # Train

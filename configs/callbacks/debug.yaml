@@ -1,2 +1,3 @@
-_target_: shark.callbacks.DebugCallback
-level: DEBUG
+debug:
+  _target_: shark.callbacks.DebugCallback
+  level: DEBUG
