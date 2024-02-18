@@ -50,6 +50,8 @@ update-main:
     - git checkout $MAIN_BRANCH
     - git pull --allow-unrelated-histories
     - git merge origin/develop --allow-unrelated-histories
+    - git config --global user.email janmail1990@gmail.com
+    - git config --global user.name svnv-svsv-jm
     - git push origin $MAIN_BRANCH
 # update-main:
 #   # stage: deploy
