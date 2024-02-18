@@ -42,6 +42,7 @@ class BaseRL(pl.LightningModule):
         lr_monitor_strict: bool = False,
         rollout_max_steps: int = 1000,
         automatic_optimization: bool = True,
+        save_every_n_train_steps: int = 100,
     ) -> None:
         """
         Args:
@@ -73,6 +74,7 @@ class BaseRL(pl.LightningModule):
                 "value_module",
             ]
         )
+        self.save_every_n_train_steps = save_every_n_train_steps
         self.max_grad_norm = max_grad_norm
         self.lr = lr
         self.frame_skip = frame_skip
@@ -147,6 +149,7 @@ class BaseRL(pl.LightningModule):
                 save_top_k=3,
                 save_last=True,
                 save_on_train_epoch_end=True,
+                every_n_train_steps=self.save_every_n_train_steps,
             )
             callbacks.append(ckpt_cb)
         return callbacks
