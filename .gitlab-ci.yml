@@ -5,7 +5,8 @@ stages:
 
 variables:
   PROJECT_NAME: shark-chess
-  MAIN_BRANCH: "$CI_DEFAULT_BRANCH"
+  MAIN_BRANCH: $CI_DEFAULT_BRANCH
+  GITHUB_CLONE: git@github.com:svnv-svsv-jm/chess-rl.git
 
 
 # -----------
@@ -40,14 +41,31 @@ pytest:
 # Automatic
 # -----------
 # Automatically try to push to `main` branch
+# update-main:
+#   stage: deploy
+#   only:
+#     - develop
+#   script:
+#     - git fetch origin
+#     - git checkout $MAIN_BRANCH
+#     - git merge develop
+#     - git push origin $MAIN_BRANCH
 update-main:
-  stage: deploy
-  only:
-    - develop
+  before_script:
+    - 'which ssh-agent || ( apt-get update -y && apt-get install openssh-client -y )'
+    - eval $(ssh-agent -s)
+    - ssh-add <(echo "$GIT_SSH_PRIV_KEY")
+    - git config --global user.name "svnv-svsv-jm"
+    - git config --global user.email "janmail1990@gmail.com"
+    - mkdir -p ~/.ssh
+    - ssh-keyscan gitlab.com >> gitlab-known-hosts
+    - cat gitlab-known-hosts >> ~/.ssh/known_hosts
   script:
-    - git checkout $MAIN_BRANCH
-    - git merge develop
-    - git push origin $MAIN_BRANCH
+    - git clone git@gitlab.com:EsmailELBoBDev2/SimplyTranslate-Web.git ST 
+    - cd ST
+    - git checkout txtarea-patch
+    - git merge master
+    - git push origin txtarea-patch
 
 # -----------
 # Release
