@@ -63,8 +63,7 @@ services:
       <<: *common-variables
 
   trainer-gpu:
-    build:
-      <<: *image-build
+    image: ${IMAGE}
     container_name: trainer-gpu-${UNIQUE-0}
     entrypoint: /workdir/scripts/entrypoint.sh
     command: make exp-gpu
