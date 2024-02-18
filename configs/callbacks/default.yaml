@@ -1,4 +1,5 @@
 defaults:
   - lr_monitor.yaml
   - model_summary.yaml
+  - checkpoint.yaml
   - _self_

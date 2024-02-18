@@ -1,5 +1,5 @@
 _target_: lightning.pytorch.callbacks.ModelCheckpoint
-monitor: loss/val
+monitor: loss/train
 mode: min
 save_top_k: 3
 save_last: True
