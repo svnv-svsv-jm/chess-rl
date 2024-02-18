@@ -15,7 +15,8 @@ WORKDIR /workdir
 # Install project
 RUN apt-get update --fix-missing -qy &&\
     apt-get update -qy &&\
-    apt-get install -y apt-utils gosu make ca-certificates sudo git curl tree texlive texlive-latex-extra texlive-fonts-recommended dvipng &&\
+    apt-get install -y apt-utils gosu make ca-certificates sudo git curl tree &&\
+    # apt-get install -y texlive texlive-latex-extra texlive-fonts-recommended dvipng &&\
     apt-get install -y stockfish polyglot xboard &&\
     chmod 777 "$CHESS_ENGINE_EXECUTABLE"
 RUN pip install --upgrade pip virtualenv &&\
