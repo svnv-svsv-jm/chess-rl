@@ -21,7 +21,7 @@ class Logger:
         self.mode = mode
         self.time_info = time_info
 
-    @try_catch(level="TRACE")
+    @logger.catch(level="TRACE")
     def write(self, text: str) -> None:
         """Write to sinks."""
         # datetime object containing current date and time
