@@ -74,6 +74,7 @@ class BaseRL(pl.LightningModule):
                 "loss_module",
                 "policy_module",
                 "value_module",
+                "advantage_module",
             ]
         )
         if not hasattr(self, "env_kwargs"):

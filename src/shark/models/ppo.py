@@ -101,6 +101,8 @@ class PPO(BaseRL):
                 "loss_module",
                 "policy_module",
                 "value_module",
+                "actor_nn",
+                "value_nn",
             ]
         )
         self.gamma = gamma
