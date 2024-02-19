@@ -20,7 +20,6 @@ from torchrl.data import (
     DiscreteTensorSpec,
     OneHotDiscreteTensorSpec,
 )
-from torchrl.envs import EnvBase
 from matplotlib import pyplot as plt
 
 from shark.utils import (
@@ -30,9 +29,9 @@ from shark.utils import (
     action_to_one_hot,
     remove_illegal_move,
 )
-from shark.utils.patch import step_and_maybe_reset
+from shark.utils.patch import EnvBase
 
-WORST_REWARD = -1e6
+WORST_REWARD = -1e3
 
 
 class ChessEnv(EnvBase):
@@ -46,10 +45,10 @@ class ChessEnv(EnvBase):
         flatten_state: bool = False,
         play_as: str = "white",
         play_vs_engine: bool = True,
-        mate_amplifier: float = 100,
+        mate_amplifier: float = 10,
         softmax: bool = True,
         worst_reward: float = WORST_REWARD,
-        illegal_amplifier: float = 1000,
+        illegal_amplifier: float = 100,
         lose_on_illegal_move: bool = True,
         use_one_hot: bool = True,
         from_engine: bool = False,
@@ -361,10 +360,10 @@ class ChessEnv(EnvBase):
         s = score.white() if self.is_white else score.black()
         r: ty.Optional[ty.Union[float, int]]
         r = (s).score()
+        logger.trace(f"Score for position: {r}")
         if r is None:
             r = self.worst_reward
             # raise ValueError(f"Score: {s}")
-        logger.trace(f"Score: {r}")
         return r
 
     def _engine_move(
@@ -440,13 +439,6 @@ class ChessEnv(EnvBase):
             seed (int):
                 Seed for RNG.
         """
-
-    def step_and_maybe_reset(
-        self,
-        tensordict: TensorDictBase,
-    ) -> ty.Tuple[TensorDictBase, TensorDictBase]:
-        """Patched."""
-        return step_and_maybe_reset(self, tensordict)
 
     def _action_to_one_hot(self, action: torch.Tensor) -> torch.Tensor:
         """Convert action to one-hot if necessary. Always call this.

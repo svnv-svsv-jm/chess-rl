@@ -1,15 +1,47 @@
-__all__ = ["step_and_maybe_reset", "_cache_values", "transform_observation_spec"]
+__all__ = [
+    "EnvBase",
+    "ParallelEnv",
+    "step_and_maybe_reset",
+    "_cache_values",
+    "transform_observation_spec",
+]
 
 from loguru import logger
 import typing as ty
 from tensordict import TensorDict, TensorDictBase
-from torchrl.envs import EnvBase, DTypeCastTransform
+from torchrl.envs import (
+    DTypeCastTransform,
+    EnvBase as EnvBaseRL,
+    ParallelEnv as ParallelEnvRL,
+)
 from torchrl.envs.utils import _terminated_or_truncated, step_mdp
 from torchrl.data import TensorSpec
 
 
+class EnvBase(EnvBaseRL):
+    """Patched EnvBase..."""
+
+    def step_and_maybe_reset(
+        self,
+        tensordict: TensorDictBase,
+    ) -> ty.Tuple[TensorDictBase, TensorDictBase]:
+        """Patched."""
+        return step_and_maybe_reset(self, tensordict)
+
+
+class ParallelEnv(ParallelEnvRL):
+    """Patched ParallelEnv..."""
+
+    def step_and_maybe_reset(
+        self,
+        tensordict: TensorDictBase,
+    ) -> ty.Tuple[TensorDictBase, TensorDictBase]:
+        """Patched."""
+        return step_and_maybe_reset(self, tensordict)
+
+
 def step_and_maybe_reset(
-    self: EnvBase,
+    self: EnvBaseRL,
     tensordict: TensorDictBase,
 ) -> ty.Tuple[TensorDictBase, TensorDictBase]:
     """Runs a step in the environment and (partially) resets it if needed.

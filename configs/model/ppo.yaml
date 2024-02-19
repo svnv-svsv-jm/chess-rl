@@ -20,3 +20,6 @@ strides: 1
 paddings: 0
 chess_env_kwargs:
   lose_on_illegal_move: False
+  worst_reward: -1000
+  mate_amplifier: 10
+  illegal_amplifier: 100
