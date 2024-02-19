@@ -2,8 +2,11 @@ __all__ = ["init_experiment", "get_optimized_metric"]
 
 from loguru import logger
 import typing as ty
+import sys
+import os
 from omegaconf import DictConfig, OmegaConf
 import hydra
+from hydra.core.hydra_config import HydraConfig
 import torch
 import lightning.pytorch as pl
 from lightning.pytorch.callbacks.callback import Callback
@@ -26,6 +29,21 @@ def init_experiment(
         pl.LightningModule: model.
         pl.Trainer: trainer.
     """
+    # Logging stuff
+    logger.remove()
+    log_level = cfg.log_level if "log_level" in cfg else "INFO"
+    logger.add(sys.stderr, level=log_level.upper())
+    # Job logging file from Hydra config and add it as sink for loguru and also redirect both stdout and stderr to it
+    try:
+        hydra_cfg = HydraConfig.get()
+        job_log_file: str = hydra_cfg.job_logging["handlers"].file.filename
+        logger.info(f"Logging redirected to: {job_log_file}")
+        logger.add(job_log_file, level="INFO")
+        # log_redirect = Logger(filename=job_log_file)
+        # sys.stdout = log_redirect  # type: ignore
+        # sys.stderr = log_redirect  # type: ignore
+    except Exception:
+        logger.warning("Could not redirect logging to file.")
     # Model
     model: pl.LightningModule = hydra.utils.instantiate(cfg.model, _convert_="all")
     # Loggers
