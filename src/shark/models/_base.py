@@ -40,7 +40,7 @@ class BaseRL(pl.LightningModule):
         lr_monitor_strict: bool = False,
         rollout_max_steps: int = 1000,
         automatic_optimization: bool = True,
-        use_checkpoint_callback: bool = True,
+        use_checkpoint_callback: bool = False,
         save_every_n_train_steps: int = 100,
         num_envs: int = 1,
         env_kwargs: ty.Dict[str, ty.Any] = {},

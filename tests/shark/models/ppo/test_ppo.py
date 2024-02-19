@@ -22,6 +22,7 @@ def test_ppo() -> None:
         frames_per_batch=frames_per_batch,
         total_frames=total_frames,
         n_mlp_layers=4,
+        use_checkpoint_callback=True,
     )
     # Rollout
     rollout = model.env.rollout(3)
