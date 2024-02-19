@@ -18,7 +18,6 @@ def test_ppo() -> None:
     frames_per_batch = frame_skip * 5
     total_frames = 100
     model = PPOPendulum(
-        env="InvertedDoublePendulum-v4",
         frame_skip=frame_skip,
         frames_per_batch=frames_per_batch,
         total_frames=total_frames,
@@ -37,7 +36,9 @@ def test_ppo() -> None:
     for _, tensordict_data in enumerate(collector):
         logger.info(f"Tensordict data:\n{tensordict_data}")
         batch_size = int(tensordict_data.batch_size[0])
-        assert batch_size == int(frames_per_batch // frame_skip)
+        rollout_size = int(tensordict_data.batch_size[1])
+        assert rollout_size == int(frames_per_batch // frame_skip)
+        assert batch_size == model.num_envs
         break
     # Training
     max_steps = 2

@@ -13,8 +13,7 @@ from torch import Tensor
 from tensordict import TensorDict
 from tensordict.nn import TensorDictModule
 from torchrl.data.replay_buffers import ReplayBuffer
-from torchrl.envs.libs.gym import GymEnv
-from torchrl.envs import EnvBase
+from torchrl.envs import ParallelEnv, EnvBase, EnvCreator
 from torchrl.envs.utils import ExplorationType, set_exploration_type
 
 from shark.datasets import CollectorDataset
@@ -26,7 +25,6 @@ class BaseRL(pl.LightningModule):
 
     def __init__(
         self,
-        env: ty.Union[str, EnvBase],
         loss_module: TensorDictModule,
         policy_module: TensorDictModule,
         value_module: TensorDictModule,
@@ -44,6 +42,8 @@ class BaseRL(pl.LightningModule):
         automatic_optimization: bool = True,
         use_checkpoint_callback: bool = True,
         save_every_n_train_steps: int = 100,
+        num_envs: int = 1,
+        env_kwargs: ty.Dict[str, ty.Any] = {},
     ) -> None:
         """
         Args:
@@ -64,6 +64,7 @@ class BaseRL(pl.LightningModule):
             in_keys (ty.List[str], optional): _description_. Defaults to ["observation"].
             legacy (bool, optional): _description_. Defaults to False.
             automatic_optimization (bool, optional): _description_. Defaults to True.
+            num_envs (int, optional): _description_. Defaults to 1.
         """
         super().__init__()
         self.save_hyperparameters(
@@ -75,6 +76,8 @@ class BaseRL(pl.LightningModule):
                 "value_module",
             ]
         )
+        if not hasattr(self, "env_kwargs"):
+            self.env_kwargs = env_kwargs
         self.use_checkpoint_callback = use_checkpoint_callback
         self.save_every_n_train_steps = save_every_n_train_steps
         self.max_grad_norm = max_grad_norm
@@ -85,14 +88,16 @@ class BaseRL(pl.LightningModule):
         self.sub_batch_size = sub_batch_size
         self.rollout_max_steps = rollout_max_steps
         self.in_keys = in_keys
+        self.num_envs = num_envs
         # Environment
-        self.base_env = self._init_env(env, frame_skip=frame_skip)
-        # Env transformations
-        self.env = self.transformed_env(self.base_env)
+        self.env = ParallelEnv(
+            num_workers=num_envs,
+            create_env_fn=EnvCreator(self._make_env),
+            serial_for_single=True,
+        )
         # Patch this method with your function
         self.env.step_and_maybe_reset = lambda arg: step_and_maybe_reset(self.env, arg)
         # Sanity check
-        logger.debug(f"Env: {self.base_env}")
         logger.debug(f"observation_spec: {self.env.observation_spec}")
         logger.debug(f"reward_spec: {self.env.reward_spec}")
         logger.debug(f"done_spec: {self.env.done_spec}")
@@ -335,19 +340,44 @@ class BaseRL(pl.LightningModule):
         """Setup transformed environment."""
         return base_env
 
-    def _init_env(self, env: ty.Union[str, EnvBase], **kwargs: ty.Any) -> EnvBase:
-        """Utility function to init an env.
+    def make_env(self) -> EnvBase:
+        """You have to implement this method, which has to take no inputs and return your environment."""
+        raise NotImplementedError("You must implement this method.")
 
-        Args:
-            env (ty.Union[str, EnvBase]): _description_
+    def _make_env(self) -> EnvBase:
+        """Lambda function."""
+        env = self.make_env()
+        return self.transformed_env(env)
 
-        Returns:
-            EnvBase: _description_
-        """
-        if isinstance(env, str):
-            env = GymEnv(
-                env,
-                device=kwargs.get("device", "cpu"),
-                frame_skip=kwargs.get("frame_skip", 1),
+    def state_dict(  # type: ignore
+        self,
+        *args: ty.Any,
+        destination: ty.Dict[str, ty.Any] = None,
+        prefix: str = "",
+        keep_vars: bool = False,
+    ) -> ty.Dict[str, ty.Any]:
+        """State dict."""
+        logger.trace(
+            f"Calling with {args}; destination={destination}; prefix={prefix}; keep_vars={keep_vars}"
+        )
+        # Remove env (especially if Serial or Parallel and not plain BaseEnv)
+        # Torch is unable to pickle it
+        env = self.env
+        self.env = None
+        # Now return whatever Torch wanted us to return
+        try:
+            if destination is not None:
+                return super().state_dict(
+                    *args,
+                    destination=destination,
+                    prefix=prefix,
+                    keep_vars=keep_vars,
+                )
+            return super().state_dict(
+                *args,
+                prefix=prefix,
+                keep_vars=keep_vars,
             )
-        return env
+        # Bring `env` back
+        finally:
+            self.env = env

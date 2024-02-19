@@ -4,7 +4,6 @@ import typing as ty
 import sys, os
 
 import pandas as pd
-import matplotlib.pyplot as plt
 import lightning.pytorch as pl
 from lightning.pytorch.loggers import CSVLogger
 from tensordict import TensorDict
@@ -26,7 +25,7 @@ def test_ppo(engine_executable: str, automatic_optimization: bool) -> None:
         frames_per_batch=2,
         total_frames=10,
         automatic_optimization=automatic_optimization,
-        chess_env_kwargs=dict(lose_on_illegal_move=False),
+        env_kwargs=dict(lose_on_illegal_move=False),
     )
     # Try to manually run training loop
     # So we can decouple implementation from Lightning errors

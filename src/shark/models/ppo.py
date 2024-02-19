@@ -14,7 +14,7 @@ from torchrl.envs import (
     TransformedEnv,
     FlattenObservation,
 )
-from torchrl.envs import EnvBase
+from torchrl.envs import EnvBase, GymEnv
 from torchrl.modules import ProbabilisticActor, TanhNormal, ValueOperator, MLP, ConvNet
 from torchrl.objectives import ClipPPOLoss as BuggedClipPPOLoss
 from torchrl.objectives.value import GAE
@@ -58,7 +58,7 @@ class PPO(BaseRL):
         self,
         actor_nn: torch.nn.Module,
         value_nn: torch.nn.Module,
-        env: ty.Union[str, EnvBase] = "InvertedDoublePendulum-v4",
+        env_name: str = "InvertedDoublePendulum-v4",
         gamma: float = 0.99,
         lmbda: float = 0.95,
         entropy_eps: float = 1e-4,
@@ -107,8 +107,11 @@ class PPO(BaseRL):
         self.lmbda = lmbda
         self.entropy_eps = entropy_eps
         self.in_keys = in_keys
+        self.env_name = env_name
+        self.device_info = kwargs.get("device", "cpu")
+        self.frame_skip = kwargs.get("frame_skip", 1)
         # Environment
-        base_env = self._init_env(env)
+        base_env = self.make_env()
         # Env transformations
         env = self.transformed_env(base_env)
         # Sanity check
@@ -180,7 +183,6 @@ class PPO(BaseRL):
         loss_module.set_keys(value_target=advantage_module.value_target_key)
         # Call superclass
         super().__init__(
-            env=env,
             loss_module=loss_module,
             policy_module=policy_module,
             value_module=value_module,
@@ -189,13 +191,28 @@ class PPO(BaseRL):
             **kwargs,
         )
 
+    def make_env(self) -> EnvBase:
+        """Utility function to init an env.
+
+        Args:
+            env (ty.Union[str, EnvBase]): _description_
+
+        Returns:
+            EnvBase: _description_
+        """
+        env = GymEnv(
+            self.env_name,
+            device=self.device_info,
+            frame_skip=self.frame_skip,
+        )
+        return env
+
 
 class PPOPendulum(PPO):
     """Basic PPO Model. See: https://pytorch.org/rl/tutorials/coding_ppo.html#training-loop"""
 
     def __init__(
         self,
-        env: ty.Union[str, EnvBase] = "InvertedDoublePendulum-v4",
         num_cells: int = 256,
         n_mlp_layers: int = 3,
         **kwargs: ty.Any,
@@ -227,7 +244,10 @@ class PPOPendulum(PPO):
             legacy (bool, optional): _description_. Defaults to False.
             automatic_optimization (bool, optional): _description_. Defaults to True.
         """
-        base_env = self._init_env(env, **kwargs)
+        self.env_name = "InvertedDoublePendulum-v4"
+        self.device_info = kwargs.get("device", "cpu")
+        self.frame_skip = kwargs.get("frame_skip", 1)
+        base_env = self.make_env()
         out_features = base_env.action_spec.shape[-1]
         actor_nn = MLP(
             out_features=2 * out_features,
@@ -243,7 +263,7 @@ class PPOPendulum(PPO):
         )
         # Call superclass
         super().__init__(
-            env=env,
+            env_name="InvertedDoublePendulum-v4",
             actor_nn=actor_nn,
             value_nn=value_nn,
             **kwargs,
@@ -280,11 +300,13 @@ class PPOChess(PPO):
         kernel_sizes: ty.Sequence[int | ty.Sequence[int]] | int = 3,
         strides: ty.Sequence | int = 1,
         paddings: ty.Sequence | int = 0,
-        chess_env_kwargs: ty.Dict[str, ty.Any] = {},
+        env_kwargs: ty.Dict[str, ty.Any] = {},
         **kwargs: ty.Any,
     ) -> None:
         """Init."""
-        base_env = ChessEnv(engine_executable, **chess_env_kwargs)
+        self.engine_executable = engine_executable
+        self.env_kwargs = env_kwargs.copy()
+        base_env = ChessEnv(engine_executable, **self.env_kwargs)
         out_features = base_env.action_spec.shape[-1]
         if isinstance(num_cells, (float, int)):
             num_cells = int(num_cells)
@@ -311,11 +333,14 @@ class PPOChess(PPO):
             MLP(out_features=1, **mlp_kwargs),
         )
         super().__init__(
-            env=ChessEnv(engine_executable),
             actor_nn=actor_nn,
             value_nn=value_nn,
             **kwargs,
         )
+        self.env_name = f"{ChessEnv.__name__}"
+
+    def make_env(self) -> EnvBase:
+        return ChessEnv(self.engine_executable, **self.env_kwargs)
 
     def transformed_env(self, base_env: EnvBase) -> EnvBase:
         """Setup transformed environment."""

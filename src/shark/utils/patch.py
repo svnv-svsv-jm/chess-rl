@@ -1,21 +1,36 @@
 __all__ = [
     "EnvBase",
     "ParallelEnv",
+    "SerialEnv",
     "step_and_maybe_reset",
     "_cache_values",
     "transform_observation_spec",
 ]
 
+from collections import OrderedDict
 from loguru import logger
 import typing as ty
 from tensordict import TensorDict, TensorDictBase
 from torchrl.envs import (
     DTypeCastTransform,
+    SerialEnv as SerialEnvRL,
     EnvBase as EnvBaseRL,
     ParallelEnv as ParallelEnvRL,
 )
 from torchrl.envs.utils import _terminated_or_truncated, step_mdp
 from torchrl.data import TensorSpec
+
+
+class SerialEnv(SerialEnvRL):
+    """Patched SerialEnv..."""
+
+    def step_and_maybe_reset(
+        self,
+        tensordict: TensorDictBase,
+    ) -> ty.Tuple[TensorDictBase, TensorDictBase]:
+        """Patched."""
+        super().step_and_maybe_reset()
+        return step_and_maybe_reset(self, tensordict)
 
 
 class EnvBase(EnvBaseRL):
