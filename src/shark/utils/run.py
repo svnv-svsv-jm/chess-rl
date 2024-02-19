@@ -12,6 +12,7 @@ import lightning.pytorch as pl
 from lightning.pytorch.callbacks.callback import Callback
 from lightning.pytorch.loggers import Logger
 
+from .logger import Logger as MyLogger
 
 _OUT_METRIC = ty.Union[torch.Tensor, ty.Dict[str, torch.Tensor]]
 
@@ -39,9 +40,9 @@ def init_experiment(
         job_log_file: str = hydra_cfg.job_logging["handlers"].file.filename
         logger.info(f"Logging redirected to: {job_log_file}")
         logger.add(job_log_file, level="INFO")
-        # log_redirect = Logger(filename=job_log_file)
-        # sys.stdout = log_redirect  # type: ignore
-        # sys.stderr = log_redirect  # type: ignore
+        log_redirect = MyLogger(filename=job_log_file)
+        sys.stdout = log_redirect  # type: ignore
+        sys.stderr = log_redirect  # type: ignore
     except Exception:
         logger.warning("Could not redirect logging to file.")
     # Model
