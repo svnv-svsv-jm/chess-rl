@@ -46,7 +46,7 @@ class ChessEnv(EnvBase):
         play_as: str = "white",
         play_vs_engine: bool = True,
         mate_amplifier: float = 10,
-        softmax: bool = True,
+        softmax: bool = False,
         worst_reward: float = WORST_REWARD,
         illegal_amplifier: float = 100,
         lose_on_illegal_move: bool = True,
@@ -95,9 +95,7 @@ class ChessEnv(EnvBase):
             softmax (bool, optional):
                 If `True`, action values go through a softmax operation.
                 This is useful, yet not necessary, when your agent outputs logits.
-                This is mandatory if you want this environment to automatically discard any illegal chess
-                move that your agent may select.
-                Defaults to `True`.
+                Defaults to `False`.
 
             worst_reward (float, optional):
                 Value for the worst reward possible, e.g. when losing a game. Defaults to `WORST_REWARD`.
@@ -264,6 +262,37 @@ class ChessEnv(EnvBase):
         action: Tensor = tensordict["action"]
         logger.trace(f"Reading action: {action.size()}")
         device = action.device
+        # Check if game is already over?
+        if self.board.is_game_over():
+            logger.warning("How TF did you end up here?")
+            outcome = self.board.outcome()
+            if outcome is None:
+                r = self.worst_reward
+            else:
+                if outcome.winner == self.is_white:
+                    r = -self.worst_reward
+                else:
+                    r = self.worst_reward
+                if self.board.is_checkmate():
+                    logger.debug(f"{self.board.outcome()}")
+                    r = r * self.mate_amplifier
+            reward = reward = torch.Tensor([r]).to(self.reward_spec.dtype)
+            # Return new TensorDict
+            td = TensorDict(
+                {
+                    "observation": self.update_state().to(device),
+                    "reward": reward.to(device),
+                    "done": True,
+                },
+                batch_size=torch.Size(),
+                device=device,
+            )
+            logger.trace(f"Returning new TensorDict: {td}")
+            return td
+        # Sanity check that should be impossible to violate
+        assert (
+            len(list(self.board.legal_moves)) > 0
+        ), f"No legal move to choose from: {self.board.outcome()}"
         # Convert action to one-hot
         action = self._action_to_one_hot(action)
         # Get UCI
@@ -304,15 +333,26 @@ class ChessEnv(EnvBase):
             return td
         assert is_legal, f"Illegal move: {uci}"
         # Apply move
+        logger.trace(f"Pushing {uci}")
+        self.board.push_san(uci)
+        # Get evaliation from engine
+        # If game not over, also let engine play
         with SimpleEngine.popen_uci(self.engine_path) as engine:
-            # Move
-            logger.trace(f"Pushing {uci}")
-            self.board.push_san(uci)
             # Get the evaluation from engine
             r = self._engine_eval(engine)
-            if self.board.is_checkmate():
-                logger.success(f"Game won!")
-                r = r * self.mate_amplifier
+            # Check if game is over
+            # If we won, set high reward
+            # If game is over but we didn't win, it is stalemate or draw, return 0.0
+            # If game not over, let opponet play
+            if self.board.is_game_over():
+                # Check if we won
+                if self.board.is_checkmate():
+                    logger.success(f"Game won!")
+                    r = r * self.mate_amplifier
+                else:
+                    # We haven't won but game is over
+                    logger.debug(f"{self.board.outcome()}")
+                    r = 0.0
             else:
                 # Opponent's move
                 self._opponent_move(engine)
@@ -325,10 +365,7 @@ class ChessEnv(EnvBase):
         # Check if done
         done = self.board.is_game_over()
         # Update state
-        state = board_to_tensor(self.board, flatten=self.flatten).to(self.observation_spec.dtype)
-        state = self._one_hot_state_to_discrete(state)
-        if self.flatten:
-            state = state.flatten()
+        state = self.update_state()
         # Return new TensorDict
         td = TensorDict(
             {
@@ -341,6 +378,14 @@ class ChessEnv(EnvBase):
         )
         logger.trace(f"Returning new TensorDict: {td}")
         return td
+
+    def update_state(self) -> torch.Tensor:
+        """Update state."""
+        state = board_to_tensor(self.board, flatten=self.flatten).to(self.observation_spec.dtype)
+        state = self._one_hot_state_to_discrete(state)
+        if self.flatten:
+            state = state.flatten()
+        return state
 
     def sample(self, from_engine: bool = None) -> ty.Optional[TensorDict]:
         """Sample a legal move."""

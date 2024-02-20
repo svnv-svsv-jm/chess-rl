@@ -196,6 +196,7 @@ def remove_illegal_move(
     device: torch.device = None,
 ) -> torch.Tensor:
     """Remove illegal moves from the actions."""
+    assert len(list(board.legal_moves)) > 0, f"No legal move to choose from: {board.outcome()}"
     # Check device
     if device is None:
         device = action.device
@@ -210,6 +211,8 @@ def remove_illegal_move(
     # Unsqueeze bullshit
     if mask.dim() < action.dim():
         mask = mask.unsqueeze(0)
+    # Check at least one legal move exists
+    assert mask.sum() > 0
     # Find maximum among legal values
     possible_values = action[mask]
     # Get index
