@@ -65,9 +65,3 @@ make exp
 # or if you have NVIDIA
 exp-gpu
 ```
-
-## TODO
-
-- `resume-from-checkpoint` option.
-- CQL
-- pre-trained models
