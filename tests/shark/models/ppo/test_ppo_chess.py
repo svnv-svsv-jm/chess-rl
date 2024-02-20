@@ -26,6 +26,7 @@ def test_ppo(engine_executable: str, automatic_optimization: bool) -> None:
         total_frames=10,
         automatic_optimization=automatic_optimization,
         env_kwargs=dict(lose_on_illegal_move=False),
+        num_envs=1,
     )
     # Try to manually run training loop
     # So we can decouple implementation from Lightning errors

@@ -18,8 +18,9 @@ num_cells: 256
 kernel_sizes: 3
 strides: 1
 paddings: 0
+num_envs: 1
 env_kwargs:
-  lose_on_illegal_move: False
+  lose_on_illegal_move: True
   worst_reward: -1000
   mate_amplifier: 10
   illegal_amplifier: 100
