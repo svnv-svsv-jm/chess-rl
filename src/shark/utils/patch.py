@@ -29,7 +29,6 @@ class SerialEnv(SerialEnvRL):
         tensordict: TensorDictBase,
     ) -> ty.Tuple[TensorDictBase, TensorDictBase]:
         """Patched."""
-        super().step_and_maybe_reset()
         return step_and_maybe_reset(self, tensordict)
 
 
