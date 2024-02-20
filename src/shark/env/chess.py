@@ -56,44 +56,73 @@ class ChessEnv(EnvBase):
     ) -> None:
         """
         Args:
-            engine_path (str, optional):
-                Path to chess engine. Example: `stockfish`. Defaults to `None`.
+            engine_path (str):
+                Path to chess engine. This class needs a usable chess engine.
+                For example: `stockfish`.
+                If not passed, this class will read from the `CHESS_ENGINE_EXECUTABLE` environment variable.
+                If not set, an error will be raised.
+                Please make sure to install a chess engine like Stockfish, and pass the correct
+                installation path here.
 
             time (float, optional):
-                Timeout value in seconds for engine. Defaults to `5`.
+                Timeout value in seconds for engine.
+                When the chess engine is called to validate a position or play a move, this will be the timeout for that.
+                Defaults to `5`.
 
             depth (int, optional):
-                Depth value for chess engine. Defaults to `20`.
+                Depth value for chess engine. When the chess engine is called to validate a position or play a move, this will be depth of the search tree.
+                Defaults to `20`.
 
             flatten_state (bool, optional):
-                Whether to flatten or not the state. Defaults to `False`.
+                Whether to flatten or not the state tensor.
+                The state tensor has shape `(8, 8, 13)`, where 8 x 8 is the chess board, and for each square
+                we have 13 possible values: 6 possible white pieces, 6 possible black pieces, empty square.
+                If `True`, this `(8, 8, 13)` tensor will be flattened to `(8 * 8 * 13,)`.
+                Consider not doing this.
+                Defaults to `False`.
 
             play_as (str, optional):
                 White or black. Defaults to `"white"`.
 
             play_vs_engine (bool, optional):
-                Defaults to `True`.
+                Defaults to `True`. The `False` value is reserved for future use. Currently unsupported.
+                In the future, you will be able to play against another RL agent.
 
             mate_amplifier (float, optional):
-                Reward amplifier when mate happens. Defaults to `100`.
+                Reward amplifier when mate happens.
+                Defaults to `100`.
 
             softmax (bool, optional):
-                If `True`, action values are `.softmax()`-ed. Defaults to `True`.
+                If `True`, action values go through a softmax operation.
+                This is useful, yet not necessary, when your agent outputs logits.
+                This is mandatory if you want this environment to automatically discard any illegal chess
+                move that your agent may select.
+                Defaults to `True`.
 
             worst_reward (float, optional):
-                Value for the worst reward possible. Defaults to `WORST_REWARD`.
+                Value for the worst reward possible, e.g. when losing a game. Defaults to `WORST_REWARD`.
 
             illegal_amplifier (float, optional):
-                Reward amplifier when an illegal move is selected. Defaults to `1000`.
+                Reward amplifier when an illegal move is selected.
+                Defaults to `1000`.
 
             lose_on_illegal_move (bool, optional): Defaults to `True`.
-                Whether actor loses when an illegal move is played. If `False`, given that the action tensor is a vector of probabilities, the first legal action value will be enforced from it, giving priority to actions with higher probability.
+                Whether agent loses when an illegal move is played.
+                If `False`, given that the action tensor is a vector of probabilities,
+                the first legal action value will be enforced from it,
+                giving priority to actions with higher probability.
+                If `True`, the game is automatically lost when an illegal move is selected.
+                Use this in combination with the `illegal_amplifier` parameter.
 
             use_one_hot (bool, optional):
-                Whether to use one-hot vectors for state. Defaults to `True`.
+                Whether to use one-hot vectors for state.
+                Currently, this must be `True`, as `False` is not yet supported.
+                Defaults to `True`.
 
             from_engine (bool, optional):
-                Whetehr to sample moves from engine or random.
+                Whetehr to sample moves from engine or randomly in the `sample()` method.
+                The `sample()` method is not actively used when playing, only when doing rollouts.
+                This is a rather irrelevant parameter.
         """
         super().__init__(**kwargs)  # call the constructor of the base class
         # Chess
@@ -213,7 +242,7 @@ class ChessEnv(EnvBase):
         td = TensorDict(
             {
                 "observation": state,
-                "reward": torch.Tensor([0]).to(self.reward_spec.dtype).to(device),
+                # "reward": torch.Tensor([0]).to(self.reward_spec.dtype).to(device),
                 "done": self.board.is_game_over(),
             },
             batch_size=shape,
@@ -497,3 +526,7 @@ class ChessEnv(EnvBase):
         if isinstance(self._state, DiscreteTensorSpec):
             state = state.argmax(-1)
         return state.float()
+
+    def is_game_over(self) -> bool:
+        """Tells you whether the game is over or not."""
+        return self.board.is_game_over()
