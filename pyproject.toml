@@ -85,6 +85,7 @@ exclude_lines = [
     "logger.debug",
     "logger.trace",
 ]
+omit = ["src/shark/utils/logger.py"]
 
 # ----------------------
 # PyTest

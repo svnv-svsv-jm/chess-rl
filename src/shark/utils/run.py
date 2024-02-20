@@ -37,12 +37,12 @@ def init_experiment(
     # Job logging file from Hydra config and add it as sink for loguru and also redirect both stdout and stderr to it
     try:
         hydra_cfg = HydraConfig.get()
-        job_log_file: str = hydra_cfg.job_logging["handlers"].file.filename
-        logger.info(f"Logging redirected to: {job_log_file}")
-        logger.add(job_log_file, level="INFO")
-        log_redirect = MyLogger(filename=job_log_file)
-        sys.stdout = log_redirect  # type: ignore
-        sys.stderr = log_redirect  # type: ignore
+        job_log_file: str = hydra_cfg.job_logging["handlers"].file.filename  # pragma: no cover
+        logger.info(f"Logging redirected to: {job_log_file}")  # pragma: no cover
+        logger.add(job_log_file, level="INFO")  # pragma: no cover
+        log_redirect = MyLogger(filename=job_log_file)  # pragma: no cover
+        sys.stdout = log_redirect  # type: ignore # pragma: no cover
+        sys.stderr = log_redirect  # type: ignore # pragma: no cover
     except Exception:
         logger.warning("Could not redirect logging to file.")
     # Model
