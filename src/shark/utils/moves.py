@@ -6,6 +6,7 @@ __all__ = [
     "action_to_uci",
     "get_move_score",
     "remove_illegal_move",
+    "uci_to_one_hot_action",
 ]
 
 import typing as ty
@@ -14,7 +15,17 @@ from loguru import logger
 import chess
 from chess.engine import SimpleEngine, PovScore
 import torch
-import numpy as np
+
+
+def uci_to_one_hot_action(uci: str) -> torch.Tensor:
+    """Transforms a UCI to a one-hot action vector."""
+    a, action_map = move_action_space()
+    idx = 0
+    for uci_, idx in action_map.items():
+        if uci == uci_:
+            break
+    a[idx] = 1
+    return a
 
 
 def get_move_score(
@@ -185,15 +196,26 @@ def remove_illegal_move(
     device: torch.device = None,
 ) -> torch.Tensor:
     """Remove illegal moves from the actions."""
+    # Check device
     if device is None:
         device = action.device
-    mask = torch.zeros_like(action, device=device).view(-1)
-    _, act_dict = move_action_space()
+    # Get empty action vector and all moves
+    a, act_dict = move_action_space()
+    # Create mask, set to True when move is legal
+    mask = torch.zeros_like(action, device=device).bool()
     for uci, i in act_dict.items():
         move = chess.Move.from_uci(uci)
         if board.is_legal(move):
-            mask[i] = 1
+            mask[i] = True
+    # Unsqueeze bullshit
     if mask.dim() < action.dim():
         mask = mask.unsqueeze(0)
-    action = action.to(device) * mask
-    return action.to(device)
+    # Find maximum among legal values
+    possible_values = action[mask]
+    # Get index
+    max_index = possible_values.argmax(-1)
+    indices = torch.arange(action.size(-1))[mask]
+    actual_index = indices[max_index]
+    # Return that move
+    a[actual_index] = 1
+    return a.to(device)
