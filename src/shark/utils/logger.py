@@ -22,7 +22,7 @@ class Logger:
         self.time_info = time_info
 
     @logger.catch(level="TRACE")
-    def write(self, text: str) -> None:
+    def write(self, text: str) -> None:  # pragma: no cover
         """Write to sinks."""
         # datetime object containing current date and time
         if self.time_info:
@@ -36,7 +36,7 @@ class Logger:
             log.flush()  # If you want the output to be visible immediately
 
     @logger.catch(level="TRACE")
-    def flush(
+    def flush(  # pragma: no cover
         self,
         *args: ty.Any,
         **kwargs: ty.Any,
@@ -45,6 +45,6 @@ class Logger:
         with open(self.filename, self.mode) as log:
             log.flush()  # If you want the output to be visible immediately
 
-    def isatty(self) -> bool:
+    def isatty(self) -> bool:  # pragma: no cover
         """This needs to exist."""
         return False
