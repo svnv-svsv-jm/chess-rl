@@ -10,6 +10,7 @@ __all__ = [
 from collections import OrderedDict
 from loguru import logger
 import typing as ty
+import torch
 from tensordict import TensorDict, TensorDictBase
 from torchrl.envs import (
     DTypeCastTransform,
@@ -98,6 +99,9 @@ def step_and_maybe_reset(
             is_shared=False)
     """
     logger.trace(f"step_and_maybe_reset...")
+    action: torch.Tensor = tensordict["action"]
+    logger.trace(f"{action.size()}")
+    assert action.size() == self.action_spec.shape, f"{self.action_spec.shape} but {action.size()}"
     tensordict = self.step(tensordict)
     # done and truncated are in done_keys
     # We read if any key is done.

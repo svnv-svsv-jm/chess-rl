@@ -13,6 +13,7 @@ from torchrl.envs import EnvBase
 from torchrl.modules import MLP, ConvNet
 
 from shark.env import ChessEnv
+from shark.nn import CQLCritic
 from ._base import BaseRL
 
 
@@ -29,6 +30,7 @@ class BaseChess(BaseRL):
         kernel_sizes: ty.Sequence[int | ty.Sequence[int]] | int = 3,
         strides: ty.Sequence | int = 1,
         paddings: ty.Sequence | int = 0,
+        critic_action_hidden_dim: int = 32,
         env_kwargs: ty.Dict[str, ty.Any] = {},
         **kwargs: ty.Any,
     ) -> None:
@@ -57,10 +59,21 @@ class BaseChess(BaseRL):
             ConvNet(**cnn_kwargs),
             MLP(out_features=2 * out_features, **mlp_kwargs),
         )
-        value_nn = torch.nn.Sequential(
-            ConvNet(**cnn_kwargs),
-            MLP(out_features=1, **mlp_kwargs),
-        )
+        model = kwargs.get("model", "ppo")
+        value_nn: torch.nn.Module
+        if model in ["ppo"]:
+            value_nn = torch.nn.Sequential(
+                ConvNet(**cnn_kwargs),
+                MLP(out_features=1, **mlp_kwargs),
+            )
+        elif model in ["cql"]:
+            value_nn = CQLCritic(
+                action_hidden_dim=critic_action_hidden_dim,
+                mlp_kwargs=mlp_kwargs,
+                cnn_kwargs=cnn_kwargs,
+            )
+        else:
+            raise ValueError(f"Unrecognized model {model}")
         super().__init__(
             actor_nn=actor_nn,
             value_nn=value_nn,

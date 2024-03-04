@@ -26,7 +26,8 @@ class PPO(BaseRL):
         self,
         **kwargs: ty.Any,
     ):
-        super().__init__(model="ppo", **kwargs)
+        kwargs.setdefault("model", "ppo")
+        super().__init__(**kwargs)
 
     def advantage(self, batch: ty.Any) -> None:
         """We'll need an "advantage" signal to make PPO work.

@@ -35,7 +35,7 @@ def test_cql(engine_executable: str, automatic_optimization: bool) -> None:
     loader = model.train_dataloader()
     cfg = model.configure_optimizers()
     optimizer = cfg["optimizer"]
-    for batch in loader:
+    for idx, batch in enumerate(loader):
         model.advantage(batch)
         subdata: TensorDict = model.replay_buffer.sample(model.sub_batch_size)
         loss_vals = model.loss(subdata.to(model.device))
@@ -43,8 +43,9 @@ def test_cql(engine_executable: str, automatic_optimization: bool) -> None:
         logger.info(losses)
         optimizer.zero_grad()  # type: ignore
         loss.backward()
-        logger.success(f"Able to run optim step.")
-        break
+        if idx > 1:
+            break
+    logger.success(f"Able to run optim step.")
     # Training
     trainer = pl.Trainer(
         accelerator="cpu",

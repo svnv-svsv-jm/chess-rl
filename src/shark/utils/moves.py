@@ -108,7 +108,10 @@ def action_one_hot_to_uci(action_one_hot: torch.Tensor) -> str:
     ), f"Action space has size {action_space.size()}, but the input action vector has size {action_one_hot.size()}"
     idx = action_one_hot.view(-1).argmax()
     moves = list(action_dict.keys())
-    uci = moves[idx]
+    try:
+        uci = moves[idx]
+    except IndexError as ex:
+        raise IndexError(f"Index {idx} out of range {len(moves)}") from ex
     logger.trace(f"Getting move from index {idx} out of {len(moves)} moves: {uci}")
     return uci
 

@@ -21,6 +21,7 @@ from torchrl.objectives.value import GAE
 from torchrl.objectives import ClipPPOLoss as BuggedClipPPOLoss, CQLLoss
 
 from shark.datasets import CollectorDataset
+from shark.nn import ConcatLayer
 from shark.utils.patch import step_and_maybe_reset, _cache_values
 
 
@@ -32,7 +33,6 @@ class _BaseRL(pl.LightningModule):
         loss_module: TensorDictModule,
         policy_module: TensorDictModule,
         value_module: TensorDictModule,
-        in_keys: ty.List[str],
         lr: float = 3e-4,
         max_grad_norm: float = 1.0,
         frame_skip: int = 1,
@@ -91,7 +91,6 @@ class _BaseRL(pl.LightningModule):
         self.total_frames = total_frames
         self.sub_batch_size = sub_batch_size
         self.rollout_max_steps = rollout_max_steps
-        self.in_keys = in_keys
         self.num_envs = num_envs
         # Environment
         self.env = ParallelEnv(
@@ -128,9 +127,8 @@ class _BaseRL(pl.LightningModule):
     @property
     def dataset(self) -> CollectorDataset:
         """Gets dataset."""
-        if not hasattr(self, "_dataset") or not isinstance(
-            getattr(self, "_dataset"), CollectorDataset
-        ):
+        _dataset = getattr(self, "_dataset", None)
+        if not isinstance(_dataset, CollectorDataset):
             self._dataset = CollectorDataset(
                 env=self.env,
                 policy_module=self.policy_module,
@@ -147,6 +145,7 @@ class _BaseRL(pl.LightningModule):
 
     def train_dataloader(self) -> ty.Iterable[TensorDict]:
         """Create DataLoader for training."""
+        self._dataset = None  # type: ignore
         return self.dataset
 
     def configure_callbacks(self) -> ty.Sequence[pl.Callback]:
@@ -320,7 +319,7 @@ class _BaseRL(pl.LightningModule):
         for key, value in loss_vals.items():
             if "loss_" in key:
                 loss = loss + value
-                logger.trace(f"key: {value}")
+                logger.trace(f"{key}: {value}")
                 loss_dict[f"{key}/{tag}"] = value
         assert isinstance(loss, torch.Tensor)
         return loss, loss_dict
@@ -428,7 +427,8 @@ class BaseRL(_BaseRL):
         lmbda: float = 0.95,
         entropy_eps: float = 1e-4,
         clip_epsilon: float = 0.2,
-        in_keys: ty.List[str] = ["observation"],
+        alpha_init: float = 1,
+        loss_function: str = "smooth_l1",
         flatten_state: bool = False,
         **kwargs: ty.Any,
     ) -> None:
@@ -453,7 +453,6 @@ class BaseRL(_BaseRL):
             lr_monitor_strict (bool, optional): _description_. Defaults to False.
             rollout_max_steps (int, optional): _description_. Defaults to 1000.
             n_mlp_layers (int, optional): _description_. Defaults to 3.
-            in_keys (ty.List[str], optional): _description_. Defaults to ["observation"].
             flatten (bool, optional): _description_. Defaults to False.
             flatten_start_dim (int, optional): _description_. Defaults to 0.
             legacy (bool, optional): _description_. Defaults to False.
@@ -473,7 +472,6 @@ class BaseRL(_BaseRL):
         self.gamma = gamma
         self.lmbda = lmbda
         self.entropy_eps = entropy_eps
-        self.in_keys = in_keys
         self.env_name = env_name
         self.device_info = kwargs.get("device", "cpu")
         self.frame_skip = kwargs.get("frame_skip", 1)
@@ -500,7 +498,7 @@ class BaseRL(_BaseRL):
         logger.debug(f"Initialized actor: {actor_net}")
         policy_module = TensorDictModule(
             actor_net,
-            in_keys=self.in_keys,
+            in_keys=["observation"],
             out_keys=["loc", "scale"],
         )
         td = env.reset()
@@ -517,25 +515,43 @@ class BaseRL(_BaseRL):
             return_log_prob=True,  # we'll need the log-prob for the numerator of the importance weights
         )
         logger.debug(f"Initialized policy: {policy_module}")
-        # Critic
-        value_net = torch.nn.Sequential(
-            torch.nn.Flatten(1) if flatten_state else torch.nn.Identity(),
-            value_nn,
-        )
-        logger.debug(f"Initialized critic: {value_net}")
-        value_module = ValueOperator(
-            module=value_net,
-            in_keys=self.in_keys,
-        )
-        td = env.reset()
-        value_module(td)
         # Loss
         if model in ["cql"]:
+            advantage_module = None
+            # Q-Value
+            value_module = ValueOperator(
+                module=value_nn,
+                in_keys=["observation", "action"],
+                out_keys=["state_action_value"],
+            )
+            td = env.reset()
+            td = env.rand_action(td)
+            td = env.step(td)
+            td = value_module(td)
+            logger.debug(f"Initialized value_module: {td}")
             # Loss CQL
-            loss_module = CQLLoss(policy_module, value_module)
+            loss_module = CQLLoss(
+                actor_network=policy_module,
+                qvalue_network=value_module,
+                action_spec=env.action_spec,
+                alpha_init=alpha_init,
+                loss_function=loss_function,
+            )
+            loss_module.make_value_estimator(gamma=gamma)
         elif model in ["ppo"]:
+            # Value
+            value_net = torch.nn.Sequential(
+                torch.nn.Flatten(1) if flatten_state else torch.nn.Identity(),
+                value_nn,
+            )
+            value_module = ValueOperator(
+                module=value_net,
+                in_keys=["observation"],
+            )
+            td = env.reset()
+            value_module(td)
             # Loss PPO
-            self.advantage_module = GAE(
+            advantage_module = GAE(
                 gamma=gamma,
                 lmbda=lmbda,
                 value_network=value_module,
@@ -550,9 +566,9 @@ class BaseRL(_BaseRL):
                 # these keys match by default but we set this for completeness
                 critic_coef=1.0,
                 # gamma=0.99,
-                loss_critic_type="smooth_l1",
+                loss_critic_type=loss_function,
             )
-            loss_module.set_keys(value_target=self.advantage_module.value_target_key)
+            loss_module.set_keys(value_target=advantage_module.value_target_key)
         else:
             raise ValueError(f"Unrecognized model {model}")
         # Call superclass
@@ -560,9 +576,9 @@ class BaseRL(_BaseRL):
             loss_module=loss_module,
             policy_module=policy_module,
             value_module=value_module,
-            in_keys=self.in_keys,
             **kwargs,
         )
+        self.advantage_module = advantage_module
 
     def make_env(self) -> EnvBase:
         """Utility function to init an env.
