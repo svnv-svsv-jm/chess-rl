@@ -135,12 +135,9 @@ def _cache_values(fun: ty.Callable) -> ty.Callable:
     name = fun.__name__
 
     def new_fun(self: ty.Any, netname: str = None) -> ty.Any:
-        __dict__ = self.__dict__
-        try:
-            _cache = __dict__["_cache"]
-        except KeyError as ex:
-            __dict__["_cache"] = {}
-            _cache = __dict__["_cache"]
+        __dict__: dict = self.__dict__
+        __dict__.setdefault("_cache", {})
+        _cache = __dict__["_cache"]
         attr_name = name
         if netname is not None:
             attr_name += "_" + netname

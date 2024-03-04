@@ -35,6 +35,7 @@ class PPO(BaseRL):
         """
         with torch.no_grad():
             try:
+                assert self.advantage_module is not None
                 self.advantage_module(batch)
             except RuntimeError as ex:
                 raise RuntimeError(f"{ex}\n{batch}") from ex

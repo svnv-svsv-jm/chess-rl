@@ -18,7 +18,7 @@ from torchrl.envs import ParallelEnv, EnvBase, EnvCreator, GymEnv
 from torchrl.envs.utils import ExplorationType, set_exploration_type
 from torchrl.modules import ProbabilisticActor, TanhNormal, ValueOperator
 from torchrl.objectives.value import GAE
-from torchrl.objectives import ClipPPOLoss as BuggedClipPPOLoss, CQLLoss
+from torchrl.objectives import ClipPPOLoss as BuggedClipPPOLoss, CQLLoss as BuggedCQLLoss
 
 from shark.datasets import CollectorDataset
 from shark.nn import ConcatLayer
@@ -412,6 +412,20 @@ class ClipPPOLoss(BuggedClipPPOLoss):
     # def __dict__(self, value: ty.Dict[str, ty.Any]) -> None:
     #     assert isinstance(value, dict)
     #     self.__custom_dict__ = value
+
+
+class CQLLoss(BuggedCQLLoss):
+    """Let's patch this."""
+
+    def __init__(self, *args: ty.Any, **kwargs: ty.Any) -> None:
+        super().__init__(*args, **kwargs)
+        # self.__custom_dict__: ty.Dict[str, ty.Any] = {}
+        # self.__dict__["_cache"] = {}
+
+    @property
+    @_cache_values
+    def _cached_detach_qvalue_params(self) -> ty.Any:
+        return self.qvalue_network_params.detach()
 
 
 class BaseRL(_BaseRL):
