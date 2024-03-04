@@ -12,15 +12,19 @@ import torch
 from torch import Tensor
 from tensordict import TensorDict
 from tensordict.nn import TensorDictModule
+from tensordict.nn.distributions import NormalParamExtractor
 from torchrl.data.replay_buffers import ReplayBuffer
-from torchrl.envs import ParallelEnv, EnvBase, EnvCreator
+from torchrl.envs import ParallelEnv, EnvBase, EnvCreator, GymEnv
 from torchrl.envs.utils import ExplorationType, set_exploration_type
+from torchrl.modules import ProbabilisticActor, TanhNormal, ValueOperator
+from torchrl.objectives.value import GAE
+from torchrl.objectives import ClipPPOLoss as BuggedClipPPOLoss, CQLLoss
 
 from shark.datasets import CollectorDataset
-from shark.utils.patch import step_and_maybe_reset
+from shark.utils.patch import step_and_maybe_reset, _cache_values
 
 
-class BaseRL(pl.LightningModule):
+class _BaseRL(pl.LightningModule):
     """Base RL model. See: https://pytorch.org/rl/tutorials/coding_ppo.html#training-loop"""
 
     def __init__(
@@ -28,7 +32,6 @@ class BaseRL(pl.LightningModule):
         loss_module: TensorDictModule,
         policy_module: TensorDictModule,
         value_module: TensorDictModule,
-        advantage_module: TensorDictModule,
         in_keys: ty.List[str],
         lr: float = 3e-4,
         max_grad_norm: float = 1.0,
@@ -108,7 +111,6 @@ class BaseRL(pl.LightningModule):
         self.loss_module = loss_module
         self.policy_module = policy_module
         self.value_module = value_module
-        self.advantage_module = advantage_module
         # Important: This property activates manual optimization
         self.automatic_optimization = automatic_optimization
         # Will exist only after training initialisation
@@ -191,7 +193,7 @@ class BaseRL(pl.LightningModule):
         # We evaluate the policy once every `sefl.trainer.val_check_interval` batches of data
         n = self.trainer.val_check_interval
         if n is None:
-            n = 10
+            n = 10  # pragma: no cover
         n = int(n)
         if batch_idx % n == 0:
             self.rollout()
@@ -271,6 +273,9 @@ class BaseRL(pl.LightningModule):
         except Exception as ex:
             logger.warning(ex)
 
+    def advantage(self, batch: ty.Any) -> None:
+        """Advantage step."""
+
     def step(
         self,
         batch: TensorDict,
@@ -279,13 +284,7 @@ class BaseRL(pl.LightningModule):
     ) -> Tensor:
         """Common step."""
         logger.trace(f"[{batch_idx}] Batch: {batch.batch_size}")
-        # We'll need an "advantage" signal to make PPO work.
-        # We re-compute it at each epoch as its value depends on the value network which is updated in the inner loop
-        with torch.no_grad():
-            try:
-                self.advantage_module(batch)
-            except RuntimeError as ex:
-                raise RuntimeError(f"{ex}\n{batch}") from ex
+        self.advantage(batch)
         loss = torch.tensor(0.0).to(self.device)
         n: int = self.frames_per_batch // self.sub_batch_size
         assert (
@@ -293,8 +292,8 @@ class BaseRL(pl.LightningModule):
         ), f"frames_per_batch({self.frames_per_batch}) // sub_batch_size({self.sub_batch_size}) = {n} should be > {0}."
         for _ in range(n):
             subdata: TensorDict = self.replay_buffer.sample(self.sub_batch_size)
-            loss_vals: TensorDict = self.loss_module(subdata.to(self.device))
-            loss, losses = self.loss(loss_vals, loss, tag)
+            loss_vals: TensorDict = self.loss(subdata.to(self.device))
+            loss, losses = self.collect_loss(loss_vals, loss, tag)
         self.log_dict(losses)
         self.log(f"loss/{tag}", loss, prog_bar=True)
         reward: Tensor = batch["next", "reward"]
@@ -303,7 +302,12 @@ class BaseRL(pl.LightningModule):
         self.log(f"step_count/{tag}", step_count.max().item(), prog_bar=True)
         return loss
 
-    def loss(
+    def loss(self, data: TensorDict) -> TensorDict:
+        """Evaluates the loss over input data."""
+        loss_vals: TensorDict = self.loss_module(data.to(self.device))
+        return loss_vals
+
+    def collect_loss(
         self,
         loss_vals: TensorDict,
         loss: torch.Tensor = None,
@@ -382,3 +386,196 @@ class BaseRL(pl.LightningModule):
         # Bring `env` back
         finally:
             self.env = env
+
+
+class ClipPPOLoss(BuggedClipPPOLoss):
+    """Let's patch this."""
+
+    def __init__(self, *args: ty.Any, **kwargs: ty.Any) -> None:
+        super().__init__(*args, **kwargs)
+        # self.__custom_dict__: ty.Dict[str, ty.Any] = {}
+        # self.__dict__["_cache"] = {}
+
+    @property
+    @_cache_values
+    def _cached_critic_network_params_detached(self) -> ty.Any:
+        if not self.functional:
+            return None
+        return self.critic_network_params.detach()
+
+    # @property
+    # def __dict__(self) -> ty.Dict[str, ty.Any]:
+    #     if "_cache" not in self.__custom_dict__:
+    #         self.__custom_dict__["_cache"] = {}
+    #     return self.__custom_dict__
+
+    # @__dict__.setter
+    # def __dict__(self, value: ty.Dict[str, ty.Any]) -> None:
+    #     assert isinstance(value, dict)
+    #     self.__custom_dict__ = value
+
+
+class BaseRL(_BaseRL):
+    """Base for RL Model. See: https://pytorch.org/rl/tutorials/coding_ppo.html#training-loop"""
+
+    def __init__(
+        self,
+        actor_nn: torch.nn.Module,
+        value_nn: torch.nn.Module,
+        env_name: str = "InvertedDoublePendulum-v4",
+        model: str = "ppo",
+        gamma: float = 0.99,
+        lmbda: float = 0.95,
+        entropy_eps: float = 1e-4,
+        clip_epsilon: float = 0.2,
+        in_keys: ty.List[str] = ["observation"],
+        flatten_state: bool = False,
+        **kwargs: ty.Any,
+    ) -> None:
+        """
+        Args:
+            env (ty.Union[str, EnvBase], optional): _description_. Defaults to "InvertedDoublePendulum-v4".
+            num_cells (int, optional): _description_. Defaults to 256.
+            lr (float, optional): _description_. Defaults to 3e-4.
+            max_grad_norm (float, optional): _description_. Defaults to 1.0.
+            frame_skip (int, optional): _description_. Defaults to 1.
+            frames_per_batch (int, optional): _description_. Defaults to 100.
+            total_frames (int, optional): _description_. Defaults to 100_000.
+            accelerator (ty.Union[str, torch.device], optional): _description_. Defaults to "cpu".
+            sub_batch_size (int, optional):
+                Cardinality of the sub-samples gathered from the current data in the inner loop.
+                Defaults to `1`.
+            clip_epsilon (float, optional): _description_. Defaults to 0.2.
+            gamma (float, optional): _description_. Defaults to 0.99.
+            lmbda (float, optional): _description_. Defaults to 0.95.
+            entropy_eps (float, optional): _description_. Defaults to 1e-4.
+            lr_monitor (str, optional): _description_. Defaults to "loss/train".
+            lr_monitor_strict (bool, optional): _description_. Defaults to False.
+            rollout_max_steps (int, optional): _description_. Defaults to 1000.
+            n_mlp_layers (int, optional): _description_. Defaults to 3.
+            in_keys (ty.List[str], optional): _description_. Defaults to ["observation"].
+            flatten (bool, optional): _description_. Defaults to False.
+            flatten_start_dim (int, optional): _description_. Defaults to 0.
+            legacy (bool, optional): _description_. Defaults to False.
+            automatic_optimization (bool, optional): _description_. Defaults to True.
+        """
+        self.save_hyperparameters(
+            ignore=[
+                "base_env",
+                "env",
+                "loss_module",
+                "policy_module",
+                "value_module",
+                "actor_nn",
+                "value_nn",
+            ]
+        )
+        self.gamma = gamma
+        self.lmbda = lmbda
+        self.entropy_eps = entropy_eps
+        self.in_keys = in_keys
+        self.env_name = env_name
+        self.device_info = kwargs.get("device", "cpu")
+        self.frame_skip = kwargs.get("frame_skip", 1)
+        # Environment
+        base_env = self.make_env()
+        # Env transformations
+        env = self.transformed_env(base_env)
+        # Sanity check
+        logger.debug(f"observation_spec: {base_env.observation_spec}")
+        logger.debug(f"reward_spec: {base_env.reward_spec}")
+        logger.debug(f"done_spec: {base_env.done_spec}")
+        logger.debug(f"action_spec: {base_env.action_spec}")
+        logger.debug(f"state_spec: {base_env.state_spec}")
+        # Actor
+        shape = base_env.observation_spec["observation"].shape
+        assert isinstance(shape, torch.Size)
+        out_features = base_env.action_spec.shape[-1]
+        logger.debug(f"MLP out_shape: {out_features}")
+        actor_net = torch.nn.Sequential(
+            torch.nn.Flatten(0) if flatten_state else torch.nn.Identity(),
+            actor_nn,
+            NormalParamExtractor(),
+        )
+        logger.debug(f"Initialized actor: {actor_net}")
+        policy_module = TensorDictModule(
+            actor_net,
+            in_keys=self.in_keys,
+            out_keys=["loc", "scale"],
+        )
+        td = env.reset()
+        policy_module(td)
+        policy_module = ProbabilisticActor(
+            module=policy_module,
+            spec=env.action_spec,
+            in_keys=["loc", "scale"],
+            distribution_class=TanhNormal,
+            distribution_kwargs={
+                "min": 0,  # env.action_spec.space.minimum,
+                "max": 1,  # env.action_spec.space.maximum,
+            },
+            return_log_prob=True,  # we'll need the log-prob for the numerator of the importance weights
+        )
+        logger.debug(f"Initialized policy: {policy_module}")
+        # Critic
+        value_net = torch.nn.Sequential(
+            torch.nn.Flatten(1) if flatten_state else torch.nn.Identity(),
+            value_nn,
+        )
+        logger.debug(f"Initialized critic: {value_net}")
+        value_module = ValueOperator(
+            module=value_net,
+            in_keys=self.in_keys,
+        )
+        td = env.reset()
+        value_module(td)
+        # Loss
+        if model in ["cql"]:
+            # Loss CQL
+            loss_module = CQLLoss(policy_module, value_module)
+        elif model in ["ppo"]:
+            # Loss PPO
+            self.advantage_module = GAE(
+                gamma=gamma,
+                lmbda=lmbda,
+                value_network=value_module,
+                average_gae=True,
+            )
+            loss_module = ClipPPOLoss(
+                actor=policy_module,
+                critic=value_module,
+                clip_epsilon=clip_epsilon,
+                entropy_bonus=bool(entropy_eps),
+                entropy_coef=entropy_eps,
+                # these keys match by default but we set this for completeness
+                critic_coef=1.0,
+                # gamma=0.99,
+                loss_critic_type="smooth_l1",
+            )
+            loss_module.set_keys(value_target=self.advantage_module.value_target_key)
+        else:
+            raise ValueError(f"Unrecognized model {model}")
+        # Call superclass
+        super().__init__(
+            loss_module=loss_module,
+            policy_module=policy_module,
+            value_module=value_module,
+            in_keys=self.in_keys,
+            **kwargs,
+        )
+
+    def make_env(self) -> EnvBase:
+        """Utility function to init an env.
+
+        Args:
+            env (ty.Union[str, EnvBase]): _description_
+
+        Returns:
+            EnvBase: _description_
+        """
+        env = GymEnv(
+            self.env_name,
+            device=self.device_info,
+            frame_skip=self.frame_skip,
+        )
+        return env

@@ -7,16 +7,17 @@ import pandas as pd
 import lightning.pytorch as pl
 from lightning.pytorch.loggers import CSVLogger
 from tensordict import TensorDict
+from torchrl.objectives import CQLLoss
 
 from shark.callbacks import DebugCallback
-from shark.models import PPOChess
+from shark.models import CQLChess
 from shark.utils import get_logged_metrics_from_trainer, plot_metrics
 
 
 @pytest.mark.parametrize("automatic_optimization", [False, True])
-def test_ppo(engine_executable: str, automatic_optimization: bool) -> None:
+def test_cql(engine_executable: str, automatic_optimization: bool) -> None:
     """Test PPO on InvertedDoublePendulum."""
-    model = PPOChess(
+    model = CQLChess(
         engine_executable=engine_executable,
         depth=1,
         n_mlp_layers=1,
@@ -28,13 +29,14 @@ def test_ppo(engine_executable: str, automatic_optimization: bool) -> None:
         env_kwargs=dict(lose_on_illegal_move=False),
         num_envs=1,
     )
+    assert isinstance(model.loss_module, CQLLoss)
     # Try to manually run training loop
     # So we can decouple implementation from Lightning errors
     loader = model.train_dataloader()
     cfg = model.configure_optimizers()
     optimizer = cfg["optimizer"]
     for batch in loader:
-        model.advantage_module(batch)
+        model.advantage(batch)
         subdata: TensorDict = model.replay_buffer.sample(model.sub_batch_size)
         loss_vals = model.loss(subdata.to(model.device))
         loss, losses = model.collect_loss(loss_vals)

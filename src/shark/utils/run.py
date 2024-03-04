@@ -64,7 +64,7 @@ def init_experiment(
     except Exception as ex:
         if raise_error_on_hydra_shit:
             raise ex  # pragma: no cover
-        logger.warning(ex)
+        logger.warning(ex)  # pragma: no cover
     # Trainer
     # trainer: pl.Trainer = hydra.utils.instantiate(cfg.trainer, _convert_="all")
     trainer: dict = OmegaConf.to_container(cfg.trainer)  # type: ignore

@@ -398,8 +398,8 @@ class ChessEnv(EnvBase):
                 result = engine.play(self.board, chess.engine.Limit(time=self.time))
                 move = result.move
                 if move is None:
-                    logger.warning("No legal move by engine...")
-                    return None
+                    logger.warning("No legal move by engine...")  # pragma: no cover
+                    return None  # pragma: no cover
         else:
             # Get random move
             logger.trace("Getting a random move from legal moves.")

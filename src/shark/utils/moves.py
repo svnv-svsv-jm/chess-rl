@@ -216,9 +216,10 @@ def remove_illegal_move(
     # Find maximum among legal values
     possible_values = action[mask]
     # Get index
-    max_index = possible_values.argmax(-1)
-    indices = torch.arange(action.size(-1))[mask]
-    actual_index = indices[max_index]
+    max_index = possible_values.argmax(-1).to(device)
+    i_tensor = torch.arange(action.size(-1)).to(device)
+    indeces = i_tensor[mask.to(device)].to(device)
+    actual_index = indeces[max_index]
     # Return that move
     a[actual_index] = 1
     return a.to(device)
