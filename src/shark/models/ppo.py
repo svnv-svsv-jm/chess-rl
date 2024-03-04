@@ -104,7 +104,7 @@ class PPOPendulum(PPO):
 
     def transformed_env(self, base_env: EnvBase) -> EnvBase:
         """Setup transformed environment."""
-        obs_norm = ObservationNorm(in_keys=self.in_keys)
+        obs_norm = ObservationNorm(in_keys=["observation"])
         double2float = DoubleToFloat()
         # setattr(double2float, "transform_observation_spec", transform_observation_spec)
         env = TransformedEnv(
