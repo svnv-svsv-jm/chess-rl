@@ -14,23 +14,9 @@ from shark.models import CQLChess
 from shark.utils import get_logged_metrics_from_trainer
 
 
-@pytest.mark.parametrize("automatic_optimization", [False, True])
-def test_cql(engine_executable: str, automatic_optimization: bool) -> None:
-    """Test PPO on InvertedDoublePendulum."""
-    model = CQLChess(
-        engine_executable=engine_executable,
-        depth=1,
-        n_mlp_layers=1,
-        num_mlp_cells=32,
-        num_cells=32,
-        frames_per_batch=2,
-        total_frames=10,
-        automatic_optimization=automatic_optimization,
-        env_kwargs=dict(lose_on_illegal_move=False, probability_move_is_random=0.5),
-        num_envs=1,
-        raise_error_on_nan=True,
-    )
-    assert isinstance(model.loss_module, CQLLoss)
+def test_cql_pytorch(engine_executable: str) -> None:
+    """Test CQL on Chess env with manual loop (plain PyTorch)."""
+    model = _make_model(engine_executable)
     # Try to manually run training loop
     # So we can decouple implementation from Lightning errors
     loader = model.train_dataloader()
@@ -47,7 +33,12 @@ def test_cql(engine_executable: str, automatic_optimization: bool) -> None:
         loss.backward()
         if idx > 1:
             break
-    logger.success(f"Able to run optim step.")
+
+
+@pytest.mark.parametrize("automatic_optimization", [False, True])
+def test_cql_lightning(engine_executable: str, automatic_optimization: bool) -> None:
+    """Test CQL on Chess env with Lightning."""
+    model = _make_model(engine_executable, automatic_optimization)
     # Training
     trainer = pl.Trainer(
         accelerator="cpu",
@@ -65,6 +56,24 @@ def test_cql(engine_executable: str, automatic_optimization: bool) -> None:
     df: pd.DataFrame = get_logged_metrics_from_trainer(trainer)
     logger.info(df.head())
     assert not df.isna().any().any()
+
+
+def _make_model(engine_executable: str, automatic_optimization: bool = True) -> CQLChess:
+    model = CQLChess(
+        engine_executable=engine_executable,
+        depth=1,
+        n_mlp_layers=1,
+        num_mlp_cells=32,
+        num_cells=32,
+        frames_per_batch=2,
+        total_frames=10,
+        automatic_optimization=automatic_optimization,
+        env_kwargs=dict(lose_on_illegal_move=False, probability_move_is_random=0.5),
+        num_envs=1,
+        raise_error_on_nan=True,
+    )
+    assert isinstance(model.loss_module, CQLLoss)
+    return model
 
 
 if __name__ == "__main__":

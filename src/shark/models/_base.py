@@ -332,16 +332,24 @@ class RLTrainingLoop(pl.LightningModule):
         tag: str = "train",
     ) -> ty.Tuple[torch.Tensor, ty.Dict[str, torch.Tensor]]:
         """Updates the input loss and extracts losses from input `TensorDict` and collects them into a dict."""
+        # Initialize loss
         if loss is None:
             loss = torch.tensor(0.0).to(loss_vals.device)
+        # Initialize output
         loss_dict: ty.Dict[str, torch.Tensor] = {}
+        # Iterate over losses
         for key, value in loss_vals.items():
+            # Loss actually have a key that starts with "loss_"
             if "loss_" in key:
-                if self.raise_error_on_nan:
-                    assert not value.isnan().any(), f"Invalid loss value for {key}: {value}."
-                loss = loss + value
                 logger.trace(f"{key}: {value}")
+                # If not finite, may raise error
+                if self.raise_error_on_nan:
+                    if value.isnan().any() or value.isinf().any():
+                        raise RuntimeError(f"Invalid loss value for {key}: {value}.")
+                # Update total loss
+                loss = loss + value
                 loss_dict[f"{key}/{tag}"] = value
+        # Sanity check and return
         assert isinstance(loss, torch.Tensor)
         return loss, loss_dict
 
