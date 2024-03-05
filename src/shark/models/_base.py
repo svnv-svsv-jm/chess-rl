@@ -18,20 +18,25 @@ from torchrl.envs import ParallelEnv, EnvBase, EnvCreator, GymEnv
 from torchrl.envs.utils import ExplorationType, set_exploration_type
 from torchrl.modules import ProbabilisticActor, TanhNormal, ValueOperator
 from torchrl.objectives.value import GAE
-from torchrl.objectives import ClipPPOLoss as BuggedClipPPOLoss, CQLLoss as BuggedCQLLoss
+from torchrl.objectives import (
+    ClipPPOLoss as BuggedClipPPOLoss,
+    CQLLoss as BuggedCQLLoss,
+    SoftUpdate,
+)
 
 from shark.datasets import CollectorDataset
 from shark.utils.patch import step_and_maybe_reset, _cache_values
 
 
 class RLTrainingLoop(pl.LightningModule):
-    """Base RL model. See: https://pytorch.org/rl/tutorials/coding_ppo.html#training-loop"""
+    """RL training loop. See: https://pytorch.org/rl/tutorials/coding_ppo.html#training-loop"""
 
     def __init__(
         self,
         loss_module: TensorDictModule,
         policy_module: TensorDictModule,
         value_module: TensorDictModule,
+        target_net_updater: SoftUpdate = None,
         lr: float = 3e-4,
         max_grad_norm: float = 1.0,
         frame_skip: int = 1,
@@ -44,6 +49,7 @@ class RLTrainingLoop(pl.LightningModule):
         automatic_optimization: bool = True,
         use_checkpoint_callback: bool = False,
         save_every_n_train_steps: int = 100,
+        raise_error_on_nan: bool = False,
         num_envs: int = 1,
         env_kwargs: ty.Dict[str, ty.Any] = {},
     ) -> None:
@@ -77,10 +83,12 @@ class RLTrainingLoop(pl.LightningModule):
                 "policy_module",
                 "value_module",
                 "advantage_module",
+                "target_net_updater",
             ]
         )
         if not hasattr(self, "env_kwargs"):
             self.env_kwargs = env_kwargs
+        self.raise_error_on_nan = raise_error_on_nan
         self.use_checkpoint_callback = use_checkpoint_callback
         self.save_every_n_train_steps = save_every_n_train_steps
         self.max_grad_norm = max_grad_norm
@@ -109,6 +117,7 @@ class RLTrainingLoop(pl.LightningModule):
         self.loss_module = loss_module
         self.policy_module = policy_module
         self.value_module = value_module
+        self.target_net_updater = target_net_updater
         # Important: This property activates manual optimization
         self.automatic_optimization = automatic_optimization
         # Will exist only after training initialisation
@@ -196,6 +205,9 @@ class RLTrainingLoop(pl.LightningModule):
         loss = self.step(batch, batch_idx=batch_idx, tag="train")
         # This will run only if manual optimization
         self.manual_optimization_step(loss)
+        # Update target network
+        if isinstance(self.target_net_updater, SoftUpdate):
+            self.target_net_updater.step()
         # We evaluate the policy once every `sefl.trainer.val_check_interval` batches of data
         n = self.trainer.val_check_interval
         if n is None:
@@ -325,6 +337,8 @@ class RLTrainingLoop(pl.LightningModule):
         loss_dict: ty.Dict[str, torch.Tensor] = {}
         for key, value in loss_vals.items():
             if "loss_" in key:
+                if self.raise_error_on_nan:
+                    assert not value.isnan().any(), f"Invalid loss value for {key}: {value}."
                 loss = loss + value
                 logger.trace(f"{key}: {value}")
                 loss_dict[f"{key}/{tag}"] = value
@@ -453,6 +467,7 @@ class BaseRL(RLTrainingLoop):
         alpha_init: float = 1,
         loss_function: str = "smooth_l1",
         flatten_state: bool = False,
+        tau: float = 1e-2,
         **kwargs: ty.Any,
     ) -> None:
         """
@@ -539,6 +554,7 @@ class BaseRL(RLTrainingLoop):
         )
         logger.debug(f"Initialized policy: {policy_module}")
         # Critic and loss depend on the model
+        target_net_updater = None
         if model in ["cql"]:
             advantage_module = None
             # Q-Value
@@ -561,6 +577,7 @@ class BaseRL(RLTrainingLoop):
                 loss_function=loss_function,
             )
             loss_module.make_value_estimator(gamma=gamma)
+            target_net_updater = SoftUpdate(loss_module, tau=tau)
         elif model in ["ppo"]:
             # Value
             value_net = torch.nn.Sequential(
@@ -599,6 +616,7 @@ class BaseRL(RLTrainingLoop):
             loss_module=loss_module,
             policy_module=policy_module,
             value_module=value_module,
+            target_net_updater=target_net_updater,
             **kwargs,
         )
         self.advantage_module = advantage_module

@@ -10,6 +10,7 @@ from chess.engine import SimpleEngine, PovScore
 import torch
 from torch import Tensor
 import random
+import numpy as np
 from pathlib import Path
 
 from tensordict import TensorDict, TensorDictBase
@@ -52,6 +53,7 @@ class ChessEnv(EnvBase):
         lose_on_illegal_move: bool = True,
         use_one_hot: bool = True,
         from_engine: bool = False,
+        probability_move_is_random: float = None,
         **kwargs: ty.Any,
     ) -> None:
         """
@@ -121,9 +123,15 @@ class ChessEnv(EnvBase):
                 Whetehr to sample moves from engine or randomly in the `sample()` method.
                 The `sample()` method is not actively used when playing, only when doing rollouts.
                 This is a rather irrelevant parameter.
+
+            probability_move_is_random (float, optional):
+                Probability that a move is chosen randomly rather than from the engine.
+                Pass a value `0 < x < 1`.
+                Defaults to `None`, meaning this will be ignored.
         """
         super().__init__(**kwargs)  # call the constructor of the base class
         # Chess
+        self.probability_move_is_random = probability_move_is_random
         self.use_one_hot = use_one_hot
         self.illegal_amplifier = illegal_amplifier
         self.worst_reward = worst_reward
@@ -227,7 +235,7 @@ class ChessEnv(EnvBase):
         if not self.is_white:
             with SimpleEngine.popen_uci(self.engine_path) as engine:
                 # Opponent's move
-                self._opponent_move(engine)
+                self.opponent_move(engine=engine)
         # Init new state and pack it up in a TensorDict
         state = (
             board_to_tensor(self.board, flatten=self.flatten)
@@ -241,7 +249,7 @@ class ChessEnv(EnvBase):
             {
                 "observation": state,
                 # "reward": torch.Tensor([0]).to(self.reward_spec.dtype).to(device),
-                "done": self.board.is_game_over(),
+                "done": self.is_game_over(),
             },
             batch_size=shape,
             device=device,
@@ -263,8 +271,13 @@ class ChessEnv(EnvBase):
         logger.trace(f"Reading action: {action.size()}")
         device = action.device
         # Check if game is already over?
-        if self.board.is_game_over():
-            logger.warning("How TF did you end up here?")
+        if self.is_game_over():
+            # raise RuntimeError("How did you end up here?")
+            logger.warning(
+                "How did you end up here? "
+                "This seems to happen when using a `SyncDataCollector`. "
+                "Is it possible the `SyncDataCollector` did not call `.reset()` even if `done==True`?"
+            )
             outcome = self.board.outcome()
             if outcome is None:
                 r = self.worst_reward
@@ -293,77 +306,53 @@ class ChessEnv(EnvBase):
         assert (
             len(list(self.board.legal_moves)) > 0
         ), f"No legal move to choose from: {self.board.outcome()}"
-        # Convert action to one-hot
+        # Convert action to one-hot and then to UCI
         action = self._action_to_one_hot(action)
-        # Get UCI
-        uci = action_one_hot_to_uci(action)
-        move = chess.Move.from_uci(uci)
-        is_legal = self.board.is_legal(move)
-        logger.trace(f"Requested action {move} (legal={is_legal})")
-        # Softmax to have all positives
-        if self.softmax:
-            action = action.softmax(-1)
-        # Remove illegal moves
-        if not is_legal:
-            logger.trace(f"Legalizing move {move}")
-            action = remove_illegal_move(action, self.board, device=device)
-            # Get action and its UCI
-            # Action is a probability distribution over the action space
-            uci = action_one_hot_to_uci(action)
-            move = chess.Move.from_uci(uci)
-            logger.trace(f"Chosen new (legal) move {move}")
+        move = chess.Move.from_uci(action_one_hot_to_uci(action))
         # Check if legal
         is_legal = self.board.is_legal(move)
+        logger.trace(f"Requested action {move} (legal={is_legal})")
         if not is_legal and self.lose_on_illegal_move:  # pragma: no cover
-            logger.trace(f"Illegal move {move}, returning very bad reward")
-            state: torch.Tensor = tensordict["observation"]
-            state = state.to(self.observation_spec.dtype)
-            reward = torch.Tensor([self.worst_reward * self.illegal_amplifier])
-            reward = reward.to(self.reward_spec.dtype)
-            td = TensorDict(
-                {
-                    "observation": state.to(device),
-                    "reward": reward.to(device),
-                    "done": True,
-                },
-                batch_size=torch.Size(),
-                device=device,
-            )
-            logger.trace(f"Returning {td}")
-            return td
-        assert is_legal, f"Illegal move: {uci}"
+            logger.trace(f"Illegal move {move}, returning very bad reward.")
+            return self.on_illegal_move(tensordict)
+        # Remove illegal moves
+        if not self.board.is_legal(move):
+            logger.trace(f"Legalizing move {move}")
+            move = self.remove_illegal_move(action)
+            assert self.board.is_legal(move)
         # Apply move
-        logger.trace(f"Pushing {uci}")
-        self.board.push_san(uci)
+        logger.trace(f"Pushing {move.uci()}")
+        self.board.push_san(move.uci())
         # Get evaliation from engine
         # If game not over, also let engine play
         with SimpleEngine.popen_uci(self.engine_path) as engine:
             # Get the evaluation from engine
             r = self._engine_eval(engine)
-            # Check if game is over
-            # If we won, set high reward
-            # If game is over but we didn't win, it is stalemate or draw, return 0.0
-            # If game not over, let opponet play
-            if self.board.is_game_over():
-                # Check if we won
-                if self.board.is_checkmate():  # pragma: no cover
-                    logger.success(f"Game won!")  # pragma: no cover
-                    r = r * self.mate_amplifier  # pragma: no cover
-                else:
-                    # We haven't won but game is over
-                    logger.debug(f"{self.board.outcome()}")  # pragma: no cover
-                    r = 0.0  # pragma: no cover
+        # Check if game is over
+        # If we won, set high reward
+        # If game is over but we didn't win, it is stalemate or draw, return 0.0
+        # If game not over, let opponet play
+        if self.is_game_over():
+            # Check if we won
+            if self.board.is_checkmate():  # pragma: no cover
+                logger.success(f"Game won!")  # pragma: no cover
+                r = r * self.mate_amplifier  # pragma: no cover
             else:
-                # Opponent's move
-                self._opponent_move(engine)
+                # We haven't won but game is over
+                logger.debug(f"Outcome: {self.board.outcome()}")  # pragma: no cover
+                r = 0.0  # pragma: no cover
+        else:
+            # Opponent's move
+            with SimpleEngine.popen_uci(self.engine_path) as engine:
+                self.opponent_move(engine=engine)
+        # Check if done
+        done = self.is_game_over()
         # Reward
         if self.board.is_checkmate():
             logger.debug(f"Game lost!")
             r = r * self.mate_amplifier
         logger.trace(f"Reward: {r}")
         reward = torch.Tensor([r]).to(self.reward_spec.dtype)
-        # Check if done
-        done = self.board.is_game_over()
         # Update state
         state = self.update_state()
         # Return new TensorDict
@@ -379,6 +368,38 @@ class ChessEnv(EnvBase):
         logger.trace(f"Returning new TensorDict: {td}")
         return td
 
+    def on_illegal_move(self, tensordict: TensorDict) -> TensorDict:
+        """Lose when an illegal move is chosen."""
+        device = tensordict.device
+        state: torch.Tensor = tensordict["observation"]
+        state = state.to(self.observation_spec.dtype)
+        reward = torch.Tensor([self.worst_reward * self.illegal_amplifier])
+        reward = reward.to(self.reward_spec.dtype)
+        td = TensorDict(
+            {
+                "observation": state.to(device),
+                "reward": reward.to(device),
+                "done": True,
+            },
+            batch_size=torch.Size(),
+            device=device,
+        )
+        logger.trace(f"Returning {td}")
+        return td
+
+    def remove_illegal_move(self, action: torch.Tensor) -> chess.Move:
+        """Remove illegal moves."""
+        # Softmax to have all positives
+        if self.softmax:
+            action = action.softmax(-1)
+        action = remove_illegal_move(action, self.board, device=action.device)
+        # Get action and its UCI
+        # Action is a probability distribution over the action space
+        uci = action_one_hot_to_uci(action)
+        move = chess.Move.from_uci(uci)
+        logger.trace(f"Chosen new (legal) move {move}")
+        return move
+
     def update_state(self) -> torch.Tensor:
         """Update state."""
         state = board_to_tensor(self.board, flatten=self.flatten).to(self.observation_spec.dtype)
@@ -392,22 +413,18 @@ class ChessEnv(EnvBase):
         if from_engine is None:
             from_engine = self.from_engine
         if from_engine:
-            # Get move rom engine
+            # Get move from engine
             with SimpleEngine.popen_uci(self.engine_path) as engine:
                 logger.trace(f"Sampling a move from {self.engine_path}")
                 result = engine.play(self.board, chess.engine.Limit(time=self.time))
                 move = result.move
-                if move is None:
-                    logger.warning("No legal move by engine...")  # pragma: no cover
-                    return None  # pragma: no cover
         else:
             # Get random move
-            logger.trace("Getting a random move from legal moves.")
-            legal_moves = list(self.board.legal_moves)
-            if len(legal_moves) < 1:
-                logger.warning("No legal move...")
-                return None
-            move = random.choice(legal_moves)
+            move = self._get_random_move()
+        # Early stop condition
+        if move is None:
+            logger.warning("No legal move by engine...")  # pragma: no cover
+            return None  # pragma: no cover
         # Get action tensor
         action = action_to_one_hot(move.uci(), chess_board=self.board)
         action = self._one_hot_action_to_discrete(action)
@@ -419,6 +436,16 @@ class ChessEnv(EnvBase):
             device=self.device,
         )
         return td
+
+    def _get_random_move(self) -> ty.Optional[chess.Move]:
+        """Select random move."""
+        logger.trace("Getting a random move from legal moves.")
+        legal_moves = list(self.board.legal_moves)
+        if len(legal_moves) < 1:
+            logger.warning("No legal move...")
+            return None
+        move = random.choice(legal_moves)
+        return move
 
     def _engine_eval(
         self,
@@ -459,20 +486,61 @@ class ChessEnv(EnvBase):
         logger.trace(f"Engine's move: {uci}")
         board.push_san(uci)
 
-    def _opponent_move(
+    def _random_move(self, board: chess.Board = None) -> None:
+        """Opponent plays a random move."""
+        if board is None:
+            board = self.board
+        # Sample random move
+        move = self._get_random_move()
+        if move is None:
+            legal_moves = list(self.board.legal_moves)
+            msg = f"Random move not available: {len(legal_moves)} available."
+            raise RuntimeError(msg)
+        # Push move to the board
+        uci = move.uci()
+        logger.trace(f"Engine's move: {uci}")
+        board.push_san(uci)
+
+    def opponent_move(
         self,
         engine: SimpleEngine = None,
         board: chess.Board = None,
     ) -> None:
+        """Push opponent's move to the board.
+
+        Args:
+            engine (SimpleEngine, optional):
+                Engine in case opponent's is an engine. Defaults to None.
+
+            board (chess.Board, optional): _description_. Defaults to None.
+
+            tensordict (TensorDictBase, optional): _description_. Defaults to None.
+
+        Raises:
+            RuntimeError: if no legal move is available for sampling (when playing vs random).
+        """
         if board is None:
             board = self.board
-        if not board.is_game_over():
-            logger.trace("Opponent's move")
-            if self.play_vs_engine:
-                assert engine is not None
-                self._engine_move(engine)
-            else:
-                raise NotImplementedError("Only playing against an engine is supported.")
+        # Nothing to do if game is over
+        if board.is_game_over():
+            return
+        # Select opponent's move, either from the engine or random
+        logger.trace("Opponent's move")
+        if self.play_vs_engine and not self.is_move_random():
+            # Check engine is available and push engine's move
+            assert engine is not None
+            self._engine_move(engine=engine, board=board)
+        else:
+            # Play random move
+            self._random_move(board=board)
+
+    def is_move_random(self) -> bool:
+        """Determines whether move should be sampled from engine or randomly."""
+        p = self.probability_move_is_random
+        if p is None:
+            return False
+        outcome = np.random.uniform(low=0, high=1)
+        return outcome > p
 
     def fake_tensordict(self) -> TensorDictBase:
         """Returns a fake `TensorDict` with key-value pairs that match in shape, device and dtype what can be expected during an environment rollout."""
@@ -480,7 +548,7 @@ class ChessEnv(EnvBase):
         logger.debug(f"fake_tensordict: {td}")
         return td
 
-    def rand_action(self, tensordict: Optional[TensorDictBase] = None) -> TensorDict:
+    def rand_action(self, tensordict: TensorDictBase = None) -> TensorDict:
         """Performs a random action given the `action_spec` attribute.
 
         Args:

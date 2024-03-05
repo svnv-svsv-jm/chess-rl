@@ -10,9 +10,14 @@ import lightning.pytorch as pl
 class DebugCallback(pl.Callback):
     """Prints stuff at different moments during execution. Useful when debugging or during testing."""
 
-    def __init__(self, level: str = "DEBUG") -> None:
+    def __init__(
+        self,
+        level: str = "DEBUG",
+        raise_error_on_nan: bool = True,
+    ) -> None:
         super().__init__()
         self.level = level.upper()
+        self.raise_error_on_nan = raise_error_on_nan
 
     def _log(self, msg: str) -> None:  # pragma: no cover
         """Logs to correct level."""
@@ -58,9 +63,13 @@ class DebugCallback(pl.Callback):
 
     def on_before_backward(
         self,
-        *args: ty.Any,
+        trainer: pl.Trainer,
+        pl_module: pl.LightningModule,
+        loss: torch.Tensor,
     ) -> None:
         self._log("Before backward.")
+        if loss.isnan().any() and self.raise_error_on_nan:
+            raise RuntimeError(f"The loss is {loss}")
 
     def on_after_backward(
         self,

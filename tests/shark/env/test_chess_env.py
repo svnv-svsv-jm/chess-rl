@@ -16,7 +16,12 @@ from shark.utils.patch import ParallelEnv
 @pytest.mark.parametrize("num_envs", [3])
 def test_parallen_env(engine_executable: str, num_envs: int) -> None:
     """Test usage of `ChessEnv` in `ParallelEnv`."""
-    make_env = EnvCreator(lambda: ChessEnv(engine_path=engine_executable))
+    make_env = EnvCreator(
+        lambda: ChessEnv(
+            engine_path=engine_executable,
+            probability_move_is_random=0.5,
+        )
+    )
     # Makes identical copies of the env, runs them on dedicated processes
     env = ParallelEnv(num_envs, make_env)
     check_env_specs(env)
@@ -52,6 +57,7 @@ def test_use_env_in_collector(engine_executable: str, custom: bool, from_engine:
             device=device,
             lose_on_illegal_move=False,
             from_engine=from_engine,
+            probability_move_is_random=0.5,
         )
     env.set_seed(0)
     policy = RandomPolicy(env.action_spec)
@@ -79,6 +85,7 @@ def test_chess_env(engine_executable: str, use_one_hot: bool) -> None:
         play_as="black",
         device=find_device(),
         use_one_hot=use_one_hot,
+        probability_move_is_random=0.5,
     )
     # Reset
     state = env.reset()
