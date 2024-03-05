@@ -61,8 +61,8 @@ def test_cql(engine_executable: str, automatic_optimization: bool) -> None:
     trainer.fit(model)
     # Get logged stuff
     df: pd.DataFrame = get_logged_metrics_from_trainer(trainer)
-    # Plot
-    plot_metrics(df)
+    logger.info(df.head())
+    assert not df.isna().any()
 
 
 if __name__ == "__main__":

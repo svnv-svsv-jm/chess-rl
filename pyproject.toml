@@ -47,6 +47,7 @@ supervisor = "^4.2.5"
 mlflow = "^2.10.2"
 tensorboard = "^2.16.1"
 rich = "^13.7.0"
+torch-tb-profiler = "^0.4.3"
 
 [tool.poetry.dev-dependencies]
 black = { extras = ["jupyter"], version = "*" }

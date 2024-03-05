@@ -34,7 +34,7 @@ DOCKERFILE?=Dockerfile
 MEMORY=8g
 SHM=4g
 CPUS=1
-DOCKER_COMMON_FLAGS=--cpus=$(CPUS) --memory=$(MEMORY) --shm-size=$(SHM) --network=host --volume $(PWD):/workdir -e LOCAL_USER_ID -e LOCAL_USER
+DOCKER_COMMON_FLAGS=--cpus=$(CPUS) --memory=$(MEMORY) --shm-size=$(SHM) --network=host
 REGISTRY=registry.gitlab.com/svnv-svsv-jm/chess-rl
 IMAGE=$(PROJECT_NAME)
 IMAGE_PYTHON=/venv/bin/python
@@ -138,8 +138,10 @@ exp-base: PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512
 exp-base: DOCKER_FLAGS=-d
 exp-base: NOW=$(shell date '+%Y-%m-%d_%H:%M:%S')
 exp-base: CMD=$(IMAGE_PYTHON) -u /workdir/$(SCRIPT) --config-name $(CONFIG) $(OVERRIDE)
+exp-base: WORKDIR=$(PWD)
 exp-base:
 	$(DOCKER) run --rm -it $(DOCKER_FLAGS) $(DOCKER_COMMON_FLAGS) \
+		--volume $(WORKDIR):/workdir \
 		$(GPU_FLAGS) \
 		--name $(PROJECT_NAME)-$(CONTAINER_NAME) \
 		-t $(REGISTRY)/$(PROJECT_NAME) \
@@ -154,3 +156,16 @@ exp: exp-base
 exp-gpu: GPU_FLAGS=--gpus all
 exp-gpu: CONFIG=main.yaml
 exp-gpu: exp-base
+
+
+# ---------------
+# remote
+# ---------------
+# Sync code
+sync-code:
+	scp -r . $(REMOTE_HOST):$(REMOTE_PATH_TO_PROJECT)/.
+
+# Get lightning_logs from remote machine
+sync-exp-logs:
+	scp -r $(REMOTE_HOST):$(REMOTE_PATH_TO_PROJECT)/lightning_logs ./lightning_logs
+cp-remote-logs: sync-exp-logs

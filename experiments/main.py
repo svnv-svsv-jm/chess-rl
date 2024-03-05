@@ -15,10 +15,11 @@ ROOT = pyrootutils.setup_root(
     pythonpath=True,
     dotenv=True,
 )
+HERE = os.path.dirname(__file__)
 
 
 @hydra.main(
-    config_path=os.path.join(ROOT, "configs"),
+    config_path=os.path.join(ROOT, HERE, "configs"),
     config_name="main",  # change using the flag `--config-name`
     version_base=None,
 )

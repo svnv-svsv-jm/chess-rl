@@ -14,7 +14,7 @@ from shark.utils import get_logged_metrics_from_trainer, plot_metrics
 
 
 @pytest.mark.parametrize("automatic_optimization", [False, True])
-def test_ppo(engine_executable: str, automatic_optimization: bool) -> None:
+def test_ppo_chess(engine_executable: str, automatic_optimization: bool) -> None:
     """Test PPO on InvertedDoublePendulum."""
     model = PPOChess(
         engine_executable=engine_executable,
@@ -35,7 +35,7 @@ def test_ppo(engine_executable: str, automatic_optimization: bool) -> None:
     optimizer = cfg["optimizer"]
     for idx, batch in enumerate(loader):
         logger.info(f"batch: {batch}")
-        model.advantage_module(batch)
+        model.advantage(batch)
         subdata: TensorDict = model.replay_buffer.sample(model.sub_batch_size)
         loss_vals = model.loss(subdata.to(model.device))
         loss, losses = model.collect_loss(loss_vals)

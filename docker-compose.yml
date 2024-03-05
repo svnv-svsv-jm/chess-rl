@@ -111,3 +111,18 @@ services:
         limits:
           cpus: "1"
           memory: 8G
+
+  tensorboard:
+    image: tensorflow/tensorflow
+    container_name: tensorboard
+    command: tensorboard --logdir=${TENSORBOARD_LOG_DIR} --port=6006 --host 0.0.0.0
+    ports:
+      - ${PORT_TB-6006}:6006 #server:container
+    volumes:
+      - ./:/workdir
+    environment: *common-variables
+    deploy:
+      resources:
+        limits:
+          cpus: 1
+          memory: 8G

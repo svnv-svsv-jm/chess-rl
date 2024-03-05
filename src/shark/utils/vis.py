@@ -5,14 +5,14 @@ import pandas as pd
 import os
 
 
-def plot_metrics(df: pd.DataFrame, show: bool = False) -> None:
+def plot_metrics(df: pd.DataFrame, show: bool = False) -> plt.Figure:
     """Cool plot.
 
     Args:
         df (pd.DataFrame):
             Metrics.
     """
-    plt.figure(figsize=(8, 8))
+    figure = plt.figure(figsize=(8, 8))
     plt.subplot(2, 2, 1)
     plt.plot(df["reward/train"].to_numpy())
     plt.title("training rewards (average)")
@@ -28,3 +28,4 @@ def plot_metrics(df: pd.DataFrame, show: bool = False) -> None:
     plt.savefig(os.path.join("pytest_artifacts", "metrics.png"))
     if show:
         plt.show()
+    return figure

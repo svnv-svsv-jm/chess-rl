@@ -4,20 +4,19 @@ import typing as ty
 import sys, os
 
 import pandas as pd
-import matplotlib.pyplot as plt
 import lightning.pytorch as pl
 from lightning.pytorch.loggers import CSVLogger
 
-from shark.models import PPOPendulum
-from shark.utils import get_logged_metrics_from_trainer, plot_metrics
+from shark.models import CQLPendulum
+from shark.utils import get_logged_metrics_from_trainer
 
 
-def test_ppo() -> None:
-    """Test PPO on InvertedDoublePendulum."""
+def test_cql() -> None:
+    """Test CQL on InvertedDoublePendulum."""
     frame_skip = 1
     frames_per_batch = frame_skip * 5
     total_frames = 100
-    model = PPOPendulum(
+    model = CQLPendulum(
         frame_skip=frame_skip,
         frames_per_batch=frames_per_batch,
         total_frames=total_frames,
@@ -25,12 +24,16 @@ def test_ppo() -> None:
         use_checkpoint_callback=True,
     )
     # Rollout
-    rollout = model.env.rollout(3)
+    env = model.env
+    rollout = env.rollout(3)
     logger.info(f"Rollout of three steps: {rollout}")
     logger.info(f"Shape of the rollout TensorDict: {rollout.batch_size}")
-    logger.info(f"Env reset: {model.env.reset()}")
-    logger.info(f"Running policy: {model.policy_module(model.env.reset())}")
-    logger.info(f"Running value: {model.value_module(model.env.reset())}")
+    logger.info(f"Env reset: {env.reset()}")
+    logger.info(f"Running policy: {model.policy_module(env.reset())}")
+    td = env.reset()
+    td = env.rand_action(td)
+    td = env.step(td)
+    logger.info(f"Running value: {model.value_module(td)}")
     # Collector
     model.setup()
     collector = model.train_dataloader()
@@ -42,7 +45,7 @@ def test_ppo() -> None:
         assert batch_size == model.num_envs
         break
     # Training
-    max_steps = 2
+    max_steps = 4
     trainer = pl.Trainer(
         accelerator="cpu",
         max_steps=max_steps,
@@ -58,8 +61,8 @@ def test_ppo() -> None:
     # Get logged stuff
     df: pd.DataFrame = get_logged_metrics_from_trainer(trainer)
     logger.info(df.head())
-    # Plot
-    plot_metrics(df)
+    # Test eval loop was run and returned metrics
+    assert "reward/eval" in df.columns
 
 
 if __name__ == "__main__":

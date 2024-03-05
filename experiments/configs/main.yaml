@@ -6,15 +6,19 @@ defaults:
   - hydra: default.yaml
   - callbacks: default.yaml
   - loggers: default.yaml
-  - model: ppo.yaml
+  - model: cql.yaml  # Change tag accordingly
   - trainer: auto.yaml
   - override hydra/sweeper: optuna
   - override hydra/sweeper/sampler: tpe
   # - override hydra/launcher: ray
   - _self_
 
+tag: CQL  # Make sure this makes sense
+ckpt_path: null
+stage: fit
+
 trainer:
-  max_steps: 1000000
+  max_steps: 10000
 
 hydra:
   mode: MULTIRUN
@@ -33,8 +37,5 @@ hydra:
       model.lmbda: interval(0.8, 0.999)
 optimize_metric: loss/train
 
-ckpt_path: null
 
-stage: fit
-tag: PPO
 

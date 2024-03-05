@@ -21,11 +21,10 @@ from torchrl.objectives.value import GAE
 from torchrl.objectives import ClipPPOLoss as BuggedClipPPOLoss, CQLLoss as BuggedCQLLoss
 
 from shark.datasets import CollectorDataset
-from shark.nn import ConcatLayer
 from shark.utils.patch import step_and_maybe_reset, _cache_values
 
 
-class _BaseRL(pl.LightningModule):
+class RLTrainingLoop(pl.LightningModule):
     """Base RL model. See: https://pytorch.org/rl/tutorials/coding_ppo.html#training-loop"""
 
     def __init__(
@@ -183,6 +182,14 @@ class _BaseRL(pl.LightningModule):
         cfg = OptimizerLRSchedulerConfig(optimizer=self.optimizer, lr_scheduler=lr_scheduler)
         return cfg
 
+    def on_validation_epoch_start(self) -> None:
+        """Validation step."""
+        self.rollout()
+
+    def on_test_epoch_start(self) -> None:
+        """Test step."""
+        self.rollout()
+
     def training_step(self, batch: TensorDict, batch_idx: int) -> Tensor:
         """Implementation follows the PyTorch tutorial: https://pytorch.org/tutorials/beginner/dcgan_faces_tutorial.html"""
         # Run optimization step
@@ -326,7 +333,9 @@ class _BaseRL(pl.LightningModule):
 
     def rollout(self, tag: str = "eval") -> None:
         """We evaluate the policy once every `sefl.trainer.val_check_interval` batches of data.
+
         Evaluation is rather simple: execute the policy without exploration (take the expected value of the action distribution) for a given number of steps.
+
         The `self.env.rollout()` method can take a policy as argument: it will then execute this policy at each step.
         """
         logger.trace("Rollout...")
@@ -428,7 +437,7 @@ class CQLLoss(BuggedCQLLoss):
         return self.qvalue_network_params.detach()
 
 
-class BaseRL(_BaseRL):
+class BaseRL(RLTrainingLoop):
     """Base for RL Model. See: https://pytorch.org/rl/tutorials/coding_ppo.html#training-loop"""
 
     def __init__(
@@ -529,7 +538,7 @@ class BaseRL(_BaseRL):
             return_log_prob=True,  # we'll need the log-prob for the numerator of the importance weights
         )
         logger.debug(f"Initialized policy: {policy_module}")
-        # Loss
+        # Critic and loss depend on the model
         if model in ["cql"]:
             advantage_module = None
             # Q-Value
