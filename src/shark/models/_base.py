@@ -525,16 +525,17 @@ class BaseRL(RLTrainingLoop):
         base_env = self.make_env()
         # Env transformations
         env = self.transformed_env(base_env)
+        # Specs
+        observation_spec = base_env.observation_spec["observation"]
+        action_space = base_env.action_spec
         # Sanity check
-        logger.debug(f"observation_spec: {base_env.observation_spec}")
+        logger.debug(f"observation_spec: {observation_spec}")
         logger.debug(f"reward_spec: {base_env.reward_spec}")
         logger.debug(f"done_spec: {base_env.done_spec}")
         logger.debug(f"action_spec: {base_env.action_spec}")
         logger.debug(f"state_spec: {base_env.state_spec}")
         # Actor
-        shape = base_env.observation_spec["observation"].shape
-        assert isinstance(shape, torch.Size)
-        out_features = base_env.action_spec.shape[-1]
+        out_features = action_space.shape[-1]
         logger.debug(f"MLP out_shape: {out_features}")
         actor_net = torch.nn.Sequential(
             torch.nn.Flatten(0) if flatten_state else torch.nn.Identity(),
