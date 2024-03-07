@@ -15,6 +15,7 @@ from torchrl.modules import MLP, ConvNet
 from shark.env import ChessEnv
 from shark.nn import CQLCritic
 from ._base import BaseRL
+from .utils import make_chess_actor_critic
 
 
 class BaseChess(BaseRL):
@@ -24,12 +25,12 @@ class BaseChess(BaseRL):
         self,
         engine_executable: str = None,
         n_mlp_layers: int = 3,
-        num_mlp_cells: ty.Sequence | int = 256,
+        num_mlp_cells: ty.Sequence[int] | int = 256,
         depth: int = 3,
-        num_cells: ty.Sequence | int = 256,
+        num_cells: ty.Sequence[int] | int = 256,
         kernel_sizes: ty.Sequence[int | ty.Sequence[int]] | int = 3,
-        strides: ty.Sequence | int = 1,
-        paddings: ty.Sequence | int = 0,
+        strides: ty.Sequence[int] | int = 1,
+        paddings: ty.Sequence[int] | int = 0,
         critic_action_hidden_dim: int = 32,
         env_kwargs: ty.Dict[str, ty.Any] = {},
         **kwargs: ty.Any,
@@ -38,42 +39,19 @@ class BaseChess(BaseRL):
         self.engine_executable = engine_executable
         self.env_kwargs = env_kwargs.copy()
         base_env = ChessEnv(engine_executable, **self.env_kwargs)
-        out_features = base_env.action_spec.shape[-1]
-        if isinstance(num_cells, (float, int)):
-            num_cells = int(num_cells)
-        if isinstance(num_mlp_cells, (float, int)):
-            num_mlp_cells = int(num_mlp_cells)
-        mlp_kwargs = dict(
-            depth=int(n_mlp_layers),
-            num_cells=num_mlp_cells,
-            dropout=True,
-        )
-        cnn_kwargs = dict(
-            depth=int(depth),
+        critic_type = kwargs.get("critic_type", "ppo")
+        actor_nn, value_nn = make_chess_actor_critic(
+            base_env=base_env,
             num_cells=num_cells,
+            n_mlp_layers=n_mlp_layers,
+            num_mlp_cells=num_mlp_cells,
             kernel_sizes=kernel_sizes,
-            strides=strides,
+            depth=depth,
             paddings=paddings,
+            strides=strides,
+            critic_action_hidden_dim=critic_action_hidden_dim,
+            critic_type=critic_type,
         )
-        actor_nn = torch.nn.Sequential(
-            ConvNet(**cnn_kwargs),
-            MLP(out_features=2 * out_features, **mlp_kwargs),
-        )
-        model = kwargs.get("model", "ppo")
-        value_nn: torch.nn.Module
-        if model in ["ppo"]:
-            value_nn = torch.nn.Sequential(
-                ConvNet(**cnn_kwargs),
-                MLP(out_features=1, **mlp_kwargs),
-            )
-        elif model in ["cql"]:
-            value_nn = CQLCritic(
-                action_hidden_dim=critic_action_hidden_dim,
-                mlp_kwargs=mlp_kwargs,
-                cnn_kwargs=cnn_kwargs,
-            )
-        else:
-            raise ValueError(f"Unrecognized model {model}")
         super().__init__(
             actor_nn=actor_nn,
             value_nn=value_nn,
