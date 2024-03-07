@@ -5,6 +5,7 @@ from loguru import logger
 import typing as ty
 
 import torch
+from tensordict import TensorDict
 from torchrl.envs import (
     Compose,
     DoubleToFloat,
@@ -29,8 +30,9 @@ class PPO(BaseRL):
         kwargs.setdefault("model", "ppo")
         super().__init__(**kwargs)
 
-    def advantage(self, batch: ty.Any) -> None:
+    def advantage(self, batch: TensorDict) -> None:
         """We'll need an "advantage" signal to make PPO work.
+
         We re-compute it at each epoch as its value depends on the value network which is updated in the inner loop.
         """
         with torch.no_grad():

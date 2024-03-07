@@ -291,8 +291,17 @@ class RLTrainingLoop(pl.LightningModule):
         except Exception as ex:
             logger.warning(ex)
 
-    def advantage(self, batch: ty.Any) -> None:
-        """Advantage step."""
+    def advantage(self, batch: TensorDict) -> None:
+        """Advantage step.
+
+        Some models (like PPO) need an advantage signal.
+        They can implement this method to do that.
+
+        For example:
+        >>> def advantage(self, batch: TensorDict) -> None:
+                with torch.no_grad():
+                    self.advantage_module(batch)
+        """
 
     def step(
         self,
@@ -302,22 +311,28 @@ class RLTrainingLoop(pl.LightningModule):
     ) -> Tensor:
         """Common step."""
         logger.trace(f"[{batch_idx}] Batch: {batch.batch_size}")
+        # Call advantage hook: this can also be an empty method
         self.advantage(batch)
+        # Initialize loss
         loss = torch.tensor(0.0).to(self.device)
+        # Sanity check
         n: int = self.frames_per_batch // self.sub_batch_size
         assert (
             n > 0
         ), f"frames_per_batch({self.frames_per_batch}) // sub_batch_size({self.sub_batch_size}) = {n} should be > {0}."
+        # Evaluate and accumulate loss
         for _ in range(n):
             subdata: TensorDict = self.replay_buffer.sample(self.sub_batch_size)
             loss_vals: TensorDict = self.loss(subdata.to(self.device))
             loss, losses = self.collect_loss(loss_vals, loss, tag)
+        # Log stuff
         self.log_dict(losses)
         self.log(f"loss/{tag}", loss, prog_bar=True)
         reward: Tensor = batch["next", "reward"]
         self.log(f"reward/{tag}", reward.mean().item(), prog_bar=True)
         step_count: Tensor = batch["step_count"]
         self.log(f"step_count/{tag}", step_count.max().item(), prog_bar=True)
+        # Return loss value
         return loss
 
     def loss(self, data: TensorDict) -> TensorDict:
