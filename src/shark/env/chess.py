@@ -1,6 +1,5 @@
-__all__ = ["ChessEnv"]
+__all__ = ["ChessEnv", "make_chess_env"]
 
-from typing import Callable, Optional
 from loguru import logger
 import typing as ty
 import os
@@ -21,7 +20,8 @@ from torchrl.data import (
     DiscreteTensorSpec,
     OneHotDiscreteTensorSpec,
 )
-from matplotlib import pyplot as plt
+from torchrl.envs import EnvCreator, ParallelEnv, RewardScaling, StepCounter
+from torchrl.envs.transforms import Compose, TransformedEnv
 
 from shark.utils import (
     board_to_tensor,
@@ -33,6 +33,47 @@ from shark.utils import (
 from shark.utils.patch import EnvBase
 
 WORST_REWARD = -1e3
+
+
+def make_chess_env(
+    engine_executable: str,
+    num_workers: int = 1,
+    parallel: bool = False,
+) -> TransformedEnv:
+    """Helper to create a chess environment.
+
+    Args:
+        engine_executable (str):
+            Path to chess engine. This class needs a usable chess engine.
+            For example: `stockfish`.
+            If not passed, this class will read from the `CHESS_ENGINE_EXECUTABLE` environment variable.
+            If not set, an error will be raised.
+            Please make sure to install a chess engine like Stockfish, and pass the correct
+            installation path here.
+
+        num_workers (int, optional):
+            Number of workers for the env.
+            Defaults to `1`.
+
+        parallel (bool, optional):
+            Whether to use a parallel environment or not.
+            Defaults to `False`.
+
+    Returns:
+        TransformedEnv: Chess environment.
+    """
+    if parallel:
+        base_env = ParallelEnv(num_workers, EnvCreator(lambda: ChessEnv(engine_executable)))
+    else:
+        base_env = ChessEnv(engine_executable)
+    env = TransformedEnv(
+        base_env,
+        Compose(
+            StepCounter(),  # to count the steps of each trajectory
+            RewardScaling(loc=0.0, scale=0.1),
+        ),
+    )
+    return env
 
 
 class ChessEnv(EnvBase):
@@ -643,3 +684,7 @@ class ChessEnv(EnvBase):
     def is_game_over(self) -> bool:
         """Tells you whether the game is over or not."""
         return self.board.is_game_over()
+
+    def close(self) -> None:
+        """Closes the game."""
+        super().close()

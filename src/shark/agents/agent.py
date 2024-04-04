@@ -17,8 +17,11 @@ class Agent:
     def __init__(self, env: gym.Env, replay_buffer: ReplayBuffer) -> None:
         """
         Args:
-            env: training environment
-            replay_buffer: replay buffer storing experiences
+            env (gym.Env):
+                Game environment.
+
+            replay_buffer:
+                Replay buffer for storing experiences.
         """
         self.env = env
         self.replay_buffer = replay_buffer
@@ -39,13 +42,19 @@ class Agent:
         """Using the given network, decide what action to carry out using an epsilon-greedy policy.
 
         Args:
-            net: DQN network
-            epsilon: value to determine likelihood of taking a random action
-            device: current device
+            net (nn.Module):
+                DQN network.
+
+            epsilon (float):
+                Value to determine likelihood of taking a random action
+
+            device (torch.device | str):
+                Current device.
 
         Returns:
-            action
+            action (int).
         """
+        # Check if we take a random action
         if np.random.random() < epsilon:
             action: int = self.env.action_space.sample()
         else:
@@ -53,7 +62,7 @@ class Agent:
             q_values = net(state)
             _, action_ = torch.max(q_values, dim=1)
             action = int(action_.item())
-
+        # Return action
         return action
 
     @torch.no_grad()
@@ -61,23 +70,31 @@ class Agent:
         self,
         net: nn.Module,
         epsilon: float = 0.0,
-        device: ty.Union[torch.device, str] = "cpu",
+        device: torch.device | str = "cpu",
     ) -> ty.Tuple[float, bool]:
         """Carries out a single interaction step between the agent and the environment.
 
         Args:
-            net: DQN network
-            epsilon: value to determine likelihood of taking a random action
-            device: current device
+            net (nn.Module):
+                DQN network.
+
+            epsilon (float):
+                Value to determine likelihood of taking a random action
+
+            device (torch.device | str):
+                Current device.
 
         Returns:
-            reward, done
-        """
-        action = self.get_action(net, epsilon, device)
+            reward (float)
 
+            done (bool)
+        """
+        # Get action from network
+        action = self.get_action(net, epsilon, device)
+        # Take a step into the game
         next_state, reward, done, _, _ = self.env.step(action)
         next_state = _fix_fucked_up_state(next_state)
-
+        # Create experience data and update replay buffer
         exp = Experience(
             state=self.state,
             action=action,
@@ -85,12 +102,12 @@ class Agent:
             done=done,
             next_state=next_state,
         )
-
         self.replay_buffer.append(exp)
-
+        # Update state and reset if done
         self.state = next_state
         if done:
             self.reset()
+        # Return reward and done state
         return float(reward), done
 
 

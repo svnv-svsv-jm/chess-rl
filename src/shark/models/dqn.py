@@ -72,18 +72,19 @@ class DQN(pl.LightningModule):
         self.env: gym.Env = gym.make(env)
         self.obs_size = int(self.env.observation_space.shape[0])  # type: ignore
         self.n_actions = int(self.env.action_space.n)  # type: ignore
-
+        # Networks
         self.net = MLP(out_features=self.n_actions, num_cells=hidden_dims)
         self.target_net = MLP(out_features=self.n_actions, num_cells=hidden_dims)
-
+        # Buffer
         self.buffer = ReplayBuffer(replay_size)
+        # Agent
         self.agent = Agent(self.env, self.buffer)
-
+        # Loss
         self.criterion = nn.MSELoss()
-
+        # H-params
         self.total_reward = 0.0
         self.episode_reward = 0.0
-
+        # Init
         self.populate(warm_start_steps)
 
     def populate(self, steps: int = 1000) -> None:

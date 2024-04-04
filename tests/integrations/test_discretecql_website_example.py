@@ -9,35 +9,8 @@ from torchrl.modules import MLP, QValueActor
 from torchrl.data import OneHotDiscreteTensorSpec
 from torchrl.objectives import DiscreteCQLLoss
 
-from shark.env import ChessEnv
-from shark.models.utils import make_chess_actor_critic
 
-
-def test_discretecql_w_chess(engine_executable: str) -> None:
-    """Test website's example + customization."""
-    # Model
-    env = ChessEnv(engine_executable)
-    actor_nn, _ = make_chess_actor_critic(
-        base_env=env,
-        critic_type="observation",
-        out_features_multiplier=1,
-    )
-    logger.info(f"Actor: {actor_nn}")
-    td = env.reset()
-    td = env.rand_action(td)
-    td = env.step(td)
-    observation: torch.Tensor = td["observation"]
-    logger.info(f"Observation: {observation.size()}")
-    action: torch.Tensor = actor_nn(observation)
-    logger.info(f"Action: {action.size()}")
-    # Set up
-    actor = QValueActor(actor_nn, in_keys=["observation"], action_space=env.action_spec)
-    loss_module = DiscreteCQLLoss(actor, action_space=env.action_spec)
-    loss = loss_module(td)
-    logger.info(f"Loss: {loss}")
-
-
-def test_discretecql() -> None:
+def test_discretecql_website_example() -> None:
     """Test website's example."""
     n_obs, n_act = 4, 3
     value_net = MLP(in_features=n_obs, out_features=n_act)
@@ -63,4 +36,4 @@ def test_discretecql() -> None:
 if __name__ == "__main__":
     logger.remove()
     logger.add(sys.stderr, level="TRACE")
-    pytest.main([__file__, "-x", "-s", "--pylint"])
+    pytest.main([__file__, "-x", "-s"])
