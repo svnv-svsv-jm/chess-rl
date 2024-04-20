@@ -28,7 +28,7 @@ class RLTrainingLoop(pl.LightningModule):
         self,
         loss_module: TensorDictModule,
         policy_module: TensorDictModule,
-        value_module: TensorDictModule,
+        advantage_module: TensorDictModule = None,
         target_net_updater: SoftUpdate = None,
         lr: float = 3e-4,
         max_grad_norm: float = 1.0,
@@ -51,7 +51,7 @@ class RLTrainingLoop(pl.LightningModule):
             env (ty.Union[str, EnvBase]): _description_
             loss_module (TensorDictModule): _description_
             policy_module (TensorDictModule): _description_
-            value_module (TensorDictModule): _description_
+            advantage_module (TensorDictModule): _description_
             lr (float, optional): _description_. Defaults to 3e-4.
             max_grad_norm (float, optional): _description_. Defaults to 1.0.
             frame_skip (int, optional): _description_. Defaults to 1.
@@ -109,7 +109,7 @@ class RLTrainingLoop(pl.LightningModule):
         # Modules
         self.loss_module = loss_module
         self.policy_module = policy_module
-        self.value_module = value_module
+        self.advantage_module = advantage_module
         self.target_net_updater = target_net_updater
         # Important: This property activates manual optimization
         self.automatic_optimization = automatic_optimization
@@ -183,6 +183,31 @@ class RLTrainingLoop(pl.LightningModule):
         )
         cfg = OptimizerLRSchedulerConfig(optimizer=self.optimizer, lr_scheduler=lr_scheduler)
         return cfg
+
+    def advantage(self, batch: TensorDict) -> None:
+        """Advantage step.
+
+        Some models (like PPO) need an advantage signal.
+        They can implement this method to do that.
+
+        For example:
+        >>> def advantage(self, batch: TensorDict) -> None:
+                with torch.no_grad():
+                    self.advantage_module(batch)
+
+        By default, this method already implements that, with a sanity check,
+        so that an early return is hit if the attribute `advantage_module` is not set.
+        """
+        # Sanity check
+        if not isinstance(self.advantage_module, TensorDictModule):
+            logger.trace(f"No advantage module: {type(self.advantage_module)}")
+            return
+        # Compute advantage signal
+        with torch.no_grad():
+            try:
+                self.advantage_module(batch)
+            except RuntimeError as ex:
+                raise RuntimeError(f"{ex}\n{batch}") from ex
 
     def on_validation_epoch_start(self) -> None:
         """Validation step."""
@@ -283,18 +308,6 @@ class RLTrainingLoop(pl.LightningModule):
             scheduler.step(self.trainer.global_step)
         except Exception as ex:
             logger.warning(ex)
-
-    def advantage(self, batch: TensorDict) -> None:
-        """Advantage step.
-
-        Some models (like PPO) need an advantage signal.
-        They can implement this method to do that.
-
-        For example:
-        >>> def advantage(self, batch: TensorDict) -> None:
-                with torch.no_grad():
-                    self.advantage_module(batch)
-        """
 
     def step(
         self,

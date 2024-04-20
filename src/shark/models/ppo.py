@@ -30,18 +30,6 @@ class PPO(BaseRL):
         kwargs.setdefault("model", "ppo")
         super().__init__(**kwargs)
 
-    def advantage(self, batch: TensorDict) -> None:
-        """We'll need an "advantage" signal to make PPO work.
-
-        We re-compute it at each epoch as its value depends on the value network which is updated in the inner loop.
-        """
-        with torch.no_grad():
-            try:
-                assert self.advantage_module is not None
-                self.advantage_module(batch)
-            except RuntimeError as ex:
-                raise RuntimeError(f"{ex}\n{batch}") from ex
-
 
 class PPOPendulum(PPO):
     """Basic PPO Model. See: https://pytorch.org/rl/tutorials/coding_ppo.html#training-loop"""

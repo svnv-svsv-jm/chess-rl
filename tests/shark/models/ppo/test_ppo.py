@@ -4,7 +4,6 @@ import typing as ty
 import sys, os
 
 import pandas as pd
-import matplotlib.pyplot as plt
 import lightning.pytorch as pl
 from lightning.pytorch.loggers import CSVLogger
 

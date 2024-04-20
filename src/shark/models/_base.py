@@ -9,55 +9,9 @@ from tensordict.nn.distributions import NormalParamExtractor
 from torchrl.envs import EnvBase, GymEnv
 from torchrl.modules import ProbabilisticActor, TanhNormal, ValueOperator
 from torchrl.objectives.value import GAE
-from torchrl.objectives import (
-    ClipPPOLoss as BuggedClipPPOLoss,
-    CQLLoss as BuggedCQLLoss,
-    SoftUpdate,
-)
+from torchrl.objectives import ClipPPOLoss, CQLLoss, DiscreteCQLLoss, SoftUpdate
 
-from shark.utils.patch import _cache_values
 from .loops import RLTrainingLoop
-
-
-class ClipPPOLoss(BuggedClipPPOLoss):
-    """Let's patch this."""
-
-    def __init__(self, *args: ty.Any, **kwargs: ty.Any) -> None:
-        super().__init__(*args, **kwargs)
-        # self.__custom_dict__: ty.Dict[str, ty.Any] = {}
-        # self.__dict__["_cache"] = {}
-
-    @property
-    @_cache_values
-    def _cached_critic_network_params_detached(self) -> ty.Any:
-        if not self.functional:
-            return None
-        return self.critic_network_params.detach()
-
-    # @property
-    # def __dict__(self) -> ty.Dict[str, ty.Any]:
-    #     if "_cache" not in self.__custom_dict__:
-    #         self.__custom_dict__["_cache"] = {}
-    #     return self.__custom_dict__
-
-    # @__dict__.setter
-    # def __dict__(self, value: ty.Dict[str, ty.Any]) -> None:
-    #     assert isinstance(value, dict)
-    #     self.__custom_dict__ = value
-
-
-class CQLLoss(BuggedCQLLoss):
-    """Let's patch this."""
-
-    def __init__(self, *args: ty.Any, **kwargs: ty.Any) -> None:
-        super().__init__(*args, **kwargs)
-        # self.__custom_dict__: ty.Dict[str, ty.Any] = {}
-        # self.__dict__["_cache"] = {}
-
-    @property
-    @_cache_values
-    def _cached_detach_qvalue_params(self) -> ty.Any:
-        return self.qvalue_network_params.detach()
 
 
 class BaseRL(RLTrainingLoop):
@@ -66,7 +20,7 @@ class BaseRL(RLTrainingLoop):
     def __init__(
         self,
         actor_nn: torch.nn.Module,
-        value_nn: torch.nn.Module,
+        value_nn: torch.nn.Module = None,
         env_name: str = "InvertedDoublePendulum-v4",
         model: str = "ppo",
         gamma: float = 0.99,
@@ -77,6 +31,7 @@ class BaseRL(RLTrainingLoop):
         loss_function: str = "smooth_l1",
         flatten_state: bool = False,
         tau: float = 1e-2,
+        discrete: bool = False,
         **kwargs: ty.Any,
     ) -> None:
         """
@@ -116,6 +71,7 @@ class BaseRL(RLTrainingLoop):
                 "value_nn",
             ]
         )
+        self.discrete = discrete
         self.gamma = gamma
         self.lmbda = lmbda
         self.entropy_eps = entropy_eps
@@ -167,28 +123,35 @@ class BaseRL(RLTrainingLoop):
         target_net_updater = None
         if model in ["cql"]:
             advantage_module = None
-            # Q-Value
-            value_module = ValueOperator(
-                module=value_nn,
-                in_keys=["observation", "action"],
-                out_keys=["state_action_value"],
-            )
-            td = env.reset()
-            td = env.rand_action(td)
-            td = env.step(td)
-            td = value_module(td)
-            logger.debug(f"Initialized value_module: {td}")
             # Loss CQL
-            loss_module = CQLLoss(
-                actor_network=policy_module,
-                qvalue_network=value_module,
-                action_spec=env.action_spec,
-                alpha_init=alpha_init,
-                loss_function=loss_function,
-            )
+            if self.discrete:
+                loss_module = DiscreteCQLLoss(policy_module, action_space=env.action_spec)
+            else:
+                if value_nn is None:
+                    raise ValueError(f"`value_nn` must be {torch.nn.Module} when continuous CQL.")
+                # Q-Value
+                value_module = ValueOperator(
+                    module=value_nn,
+                    in_keys=["observation", "action"],
+                    out_keys=["state_action_value"],
+                )
+                td = env.reset()
+                td = env.rand_action(td)
+                td = env.step(td)
+                td = value_module(td)
+                logger.debug(f"Initialized value_module: {td}")
+                loss_module = CQLLoss(
+                    actor_network=policy_module,
+                    qvalue_network=value_module,
+                    action_spec=env.action_spec,
+                    alpha_init=alpha_init,
+                    loss_function=loss_function,
+                )
             loss_module.make_value_estimator(gamma=gamma)
             target_net_updater = SoftUpdate(loss_module, tau=tau)
         elif model in ["ppo"]:
+            if value_nn is None:
+                raise ValueError(f"`value_nn` must be {torch.nn.Module} when PPO.")
             # Value
             value_net = torch.nn.Sequential(
                 torch.nn.Flatten(1) if flatten_state else torch.nn.Identity(),
@@ -225,11 +188,10 @@ class BaseRL(RLTrainingLoop):
         super().__init__(
             loss_module=loss_module,
             policy_module=policy_module,
-            value_module=value_module,
+            advantage_module=advantage_module,
             target_net_updater=target_net_updater,
             **kwargs,
         )
-        self.advantage_module = advantage_module
 
     def make_env(self) -> EnvBase:
         """Utility function to init an env.

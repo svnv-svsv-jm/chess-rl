@@ -4,7 +4,7 @@ import typing as ty
 import sys, os
 
 import torch
-from torchrl.modules import QValueActor
+from torchrl.modules import QValueActor, ValueOperator
 from torchrl.objectives import DiscreteCQLLoss
 
 from shark.env import make_chess_env
@@ -16,7 +16,7 @@ def test_discretecql_w_chess(engine_executable: str, num_workers: int) -> None:
     """Test website's example + customization."""
     # Model
     env = make_chess_env(engine_executable, num_workers=num_workers)
-    actor_nn, _ = make_chess_actor_critic(
+    actor_nn, value_nn = make_chess_actor_critic(
         base_env=env,
         critic_type="observation",
         out_features_multiplier=1,
@@ -35,6 +35,16 @@ def test_discretecql_w_chess(engine_executable: str, num_workers: int) -> None:
     loss_module = DiscreteCQLLoss(actor, action_space=env.action_spec)
     loss = loss_module(td)
     logger.info(f"Loss: {loss}")
+    # # Q-Value
+    # value_module = ValueOperator(
+    #     module=value_nn,
+    #     in_keys=["observation", "action"],
+    #     out_keys=["state_action_value"],
+    # )
+    # td = env.reset()
+    # td = env.step(env.rand_action(td))
+    # td = value_module(td)
+    # logger.debug(f"Initialized value_module: {td}")
 
 
 if __name__ == "__main__":

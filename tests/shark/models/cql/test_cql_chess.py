@@ -7,7 +7,7 @@ import pandas as pd
 import lightning.pytorch as pl
 from lightning.pytorch.loggers import CSVLogger
 from tensordict import TensorDict
-from torchrl.objectives import CQLLoss
+from torchrl.objectives import CQLLoss, DiscreteCQLLoss
 
 from shark.callbacks import DebugCallback
 from shark.models import CQLChess
@@ -71,8 +71,12 @@ def _make_model(engine_executable: str, automatic_optimization: bool = True) -> 
         env_kwargs=dict(lose_on_illegal_move=False, probability_move_is_random=0.5),
         num_envs=1,
         raise_error_on_nan=True,
+        discrete=True,
     )
-    assert isinstance(model.loss_module, CQLLoss)
+    if model.discrete:
+        assert isinstance(model.loss_module, DiscreteCQLLoss)
+    else:
+        assert isinstance(model.loss_module, CQLLoss)
     return model
 
 

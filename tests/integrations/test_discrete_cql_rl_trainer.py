@@ -6,7 +6,7 @@ import sys, os
 import uuid, tempfile
 import torch
 from tensordict.nn import TensorDictModule
-from torchrl.modules import MLP, QValueActor
+from torchrl.modules import QValueActor
 from torchrl.data import LazyMemmapStorage, MultiStep, TensorDictReplayBuffer
 from torchrl.objectives import DiscreteCQLLoss, SoftUpdate
 from torchrl.trainers import LogReward, Recorder, ReplayBufferTrainer, Trainer, UpdateWeights
@@ -19,7 +19,7 @@ from torchrl.collectors import (
 from torchrl.record.loggers.csv import CSVLogger
 from torchrl.envs import ExplorationType
 
-from shark.env import ChessEnv, make_chess_env
+from shark.env import make_chess_env
 from shark.models.utils import make_chess_actor_critic
 
 
