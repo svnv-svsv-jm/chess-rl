@@ -39,7 +39,7 @@ def test_utils_for_cov() -> None:
         ),
     )
     try:
-        get_logged_metrics_from_trainer(trainer, from_dict=True)
+        get_logged_metrics_from_trainer(trainer, from_dir=True)
     except Exception as e:
         pass
 
