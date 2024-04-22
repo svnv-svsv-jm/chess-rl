@@ -12,6 +12,7 @@ from torchrl.objectives.value import GAE
 from torchrl.objectives import ClipPPOLoss, CQLLoss, DiscreteCQLLoss, SoftUpdate
 
 from .loops import RLTrainingLoop
+from .utils import initialize
 
 
 class BaseRL(RLTrainingLoop):
@@ -120,70 +121,25 @@ class BaseRL(RLTrainingLoop):
         )
         logger.debug(f"Initialized policy: {policy_module}")
         # Critic and loss depend on the model
-        target_net_updater = None
-        if model in ["cql"]:
-            advantage_module = None
-            # Loss CQL
-            if self.discrete:
-                loss_module = DiscreteCQLLoss(policy_module, action_space=env.action_spec)
-            else:
-                if value_nn is None:
-                    raise ValueError(f"`value_nn` must be {torch.nn.Module} when continuous CQL.")
-                # Q-Value
-                value_module = ValueOperator(
-                    module=value_nn,
-                    in_keys=["observation", "action"],
-                    out_keys=["state_action_value"],
-                )
-                td = env.reset()
-                td = env.rand_action(td)
-                td = env.step(td)
-                td = value_module(td)
-                logger.debug(f"Initialized value_module: {td}")
-                loss_module = CQLLoss(
-                    actor_network=policy_module,
-                    qvalue_network=value_module,
-                    action_spec=env.action_spec,
-                    alpha_init=alpha_init,
-                    loss_function=loss_function,
-                )
-            loss_module.make_value_estimator(gamma=gamma)
-            target_net_updater = SoftUpdate(loss_module, tau=tau)
-        elif model in ["ppo"]:
-            if value_nn is None:
-                raise ValueError(f"`value_nn` must be {torch.nn.Module} when PPO.")
-            # Value
-            value_net = torch.nn.Sequential(
-                torch.nn.Flatten(1) if flatten_state else torch.nn.Identity(),
-                value_nn,
-            )
-            value_module = ValueOperator(
-                module=value_net,
-                in_keys=["observation"],
-            )
-            td = env.reset()
-            value_module(td)
-            # Loss PPO
-            advantage_module = GAE(
-                gamma=gamma,
-                lmbda=lmbda,
-                value_network=value_module,
-                average_gae=True,
-            )
-            loss_module = ClipPPOLoss(
-                actor=policy_module,
-                critic=value_module,
-                clip_epsilon=clip_epsilon,
-                entropy_bonus=bool(entropy_eps),
-                entropy_coef=entropy_eps,
-                # these keys match by default but we set this for completeness
-                critic_coef=1.0,
-                # gamma=0.99,
-                loss_critic_type=loss_function,
-            )
-            loss_module.set_keys(value_target=advantage_module.value_target_key)
-        else:
-            raise ValueError(f"Unrecognized model {model}")
+        modules = initialize(
+            policy_module=policy_module,
+            env=env,
+            model=model,
+            discrete=discrete,
+            value_nn=value_nn,
+            flatten_state=flatten_state,
+            loss_function=loss_function,
+            alpha_init=alpha_init,
+            tau=tau,
+            gamma=gamma,
+            lmbda=lmbda,
+            clip_epsilon=clip_epsilon,
+            entropy_bonus=bool(self.entropy_eps),
+            entropy_coef=self.entropy_eps,
+        )
+        loss_module = modules["loss_module"]
+        advantage_module = modules["advantage_module"]
+        target_net_updater = modules["target_net_updater"]
         # Call superclass
         super().__init__(
             loss_module=loss_module,

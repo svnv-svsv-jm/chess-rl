@@ -25,6 +25,7 @@ def test_cql_pytorch(engine_executable: str) -> None:
     for idx, batch in enumerate(loader):
         model.advantage(batch)
         subdata: TensorDict = model.replay_buffer.sample(model.sub_batch_size)
+        logger.info(f"Sampled data: {subdata}")
         loss_vals = model.loss(subdata.to(model.device))
         loss, losses = model.collect_loss(loss_vals)
         assert not loss.isnan().any()
@@ -61,6 +62,7 @@ def test_cql_lightning(engine_executable: str, automatic_optimization: bool) -> 
 def _make_model(engine_executable: str, automatic_optimization: bool = True) -> CQLChess:
     model = CQLChess(
         engine_executable=engine_executable,
+        critic_type="observation",
         depth=1,
         n_mlp_layers=1,
         num_mlp_cells=32,

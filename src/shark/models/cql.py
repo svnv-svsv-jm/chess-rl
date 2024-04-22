@@ -13,6 +13,7 @@ from torchrl.envs import (
 from torchrl.envs import EnvBase
 from torchrl.modules import MLP
 
+from .utils import make_chess_actor_critic
 from ._base import BaseRL
 from .chess import BaseChess
 

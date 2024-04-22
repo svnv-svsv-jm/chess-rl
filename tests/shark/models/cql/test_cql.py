@@ -33,7 +33,7 @@ def test_cql() -> None:
     td = env.reset()
     td = env.rand_action(td)
     td = env.step(td)
-    logger.info(f"Running value: {model.value_module(td)}")
+    model.advantage(td)
     # Collector
     model.setup()
     collector = model.train_dataloader()

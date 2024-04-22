@@ -6,6 +6,10 @@ This repo attempts to train a RL agent to play chess.
 
 As side effect, this repo also provides examples about how to use [PyTorch Lightning](https://lightning.ai/docs/pytorch/stable/) for Reinforcement Learning, with the new [TorchRL](https://github.com/pytorch/rl) library.
 
+## Idea
+
+The core idea is to solve the sparse reward problem of RL agents by using a pretrained chess engine (e.g. Stockfish) to provide feedback for each move th agent makes. Besides, the pretrained chess engine can also be used as opponent player.
+
 ## Pre-requisites
 
 Install Stockfish:

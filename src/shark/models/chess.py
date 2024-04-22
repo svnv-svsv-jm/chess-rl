@@ -33,13 +33,13 @@ class BaseChess(BaseRL):
         paddings: ty.Sequence[int] | int = 0,
         critic_action_hidden_dim: int = 32,
         env_kwargs: ty.Dict[str, ty.Any] = {},
+        critic_type: str = "ppo",
         **kwargs: ty.Any,
     ) -> None:
         """Init."""
         self.engine_executable = engine_executable
         self.env_kwargs = env_kwargs.copy()
         base_env = ChessEnv(engine_executable, **self.env_kwargs)
-        critic_type = kwargs.get("critic_type", "ppo")
         actor_nn, value_nn = make_chess_actor_critic(
             base_env=base_env,
             num_cells=num_cells,
