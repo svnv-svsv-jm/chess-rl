@@ -11,19 +11,7 @@ from torchrl.objectives.value import GAE
 from torchrl.objectives import ClipPPOLoss, CQLLoss, DiscreteCQLLoss, SoftUpdate
 
 from shark.env import ChessEnv
-from shark.nn import CQLCritic
-
-
-class ToDevice(torch.nn.Module):
-    """Fucking cast to device."""
-
-    def __init__(self, device: torch.device) -> None:
-        super().__init__()
-        self._cast_device = device
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Casts to device."""
-        return x.to(self._cast_device)
+from shark.nn import CQLCritic, ToDevice
 
 
 def make_chess_actor_critic(
@@ -91,8 +79,11 @@ def make_chess_actor_critic(
     actor_nn_ = torch.nn.Sequential(
         ConvNet(**cnn_kwargs),
         MLP(out_features=out_features_multiplier * out_features, **mlp_kwargs),
+    ).to(base_env.device)
+    actor_nn = torch.nn.Sequential(
+        ToDevice(next(actor_nn_.parameters()).device),
+        actor_nn_,
     )
-    actor_nn = torch.nn.Sequential(ToDevice(next(actor_nn_.parameters()).device), actor_nn_)
     # Critic
     value_nn: torch.nn.Module
     critic_type = critic_type.lower()
@@ -104,7 +95,7 @@ def make_chess_actor_critic(
         value_nn = torch.nn.Sequential(
             ConvNet(**cnn_kwargs),
             MLP(out_features=1, **mlp_kwargs),
-        )
+        ).to(base_env.device)
     elif critic_type in [
         "state-action",
         "state_action",
@@ -115,7 +106,7 @@ def make_chess_actor_critic(
             action_hidden_dim=critic_action_hidden_dim,
             mlp_kwargs=mlp_kwargs,
             cnn_kwargs=cnn_kwargs,
-        )
+        ).to(base_env.device)
     else:
         raise ValueError(f"Unrecognized critic type {critic_type}")
     # Return
@@ -166,6 +157,7 @@ def initialize(
     Returns:
         ty.Dict[str, ty.Optional[TensorDictModule]]: _description_
     """
+    policy_module = policy_module.to(env.device)
     target_net_updater = None
     value_module = None
     if model in ["cql"]:
@@ -246,6 +238,9 @@ def initialize_actor(
     flatten_state: bool = False,
     qvalue: bool = False,
 ) -> TensorDictModule:
+    # Cast to env device
+    actor_nn = actor_nn.to(env.device)
+
     # Q-Value actor
     if qvalue:
         actor_net = torch.nn.Sequential(
@@ -270,15 +265,16 @@ def initialize_actor(
             NormalParamExtractor(),
         )
         logger.debug(f"Initialized actor: {actor_net}")
-        policy_module = TensorDictModule(
+        tdm = TensorDictModule(
             actor_net,
             in_keys=["observation"],
             out_keys=["loc", "scale"],
         )
-        td = env.reset().to(policy_module.device)
-        policy_module(td)
+        td = env.reset()
+        tdm = tdm.to(td.device)  # Cast to device
+        tdm(td)  # pylint: disable=not-callable
         policy_module = ProbabilisticActor(
-            module=policy_module,
+            module=tdm,
             spec=env.action_spec,
             in_keys=["loc", "scale"],
             distribution_class=TanhNormal,
@@ -291,5 +287,6 @@ def initialize_actor(
 
     # Initialize and return
     td = env.reset()
-    policy_module(td)
+    policy_module = policy_module.to(td.device)  # Cast to device
+    policy_module(td)  # pylint: disable=not-callable
     return policy_module

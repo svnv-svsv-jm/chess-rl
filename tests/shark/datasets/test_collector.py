@@ -40,11 +40,11 @@ def test_collector(engine_executable: str, builtin: bool, random_policy: bool) -
     else:
         actor_nn, _ = make_chess_actor_critic(env)
         policy = initialize_actor(
-            actor_nn=actor_nn,
+            actor_nn=actor_nn.to(device),
             env=env,
             flatten_state=False,
             qvalue=False,
-        )
+        ).to(device)
     collector = CollectorDataset(
         env,
         policy,
