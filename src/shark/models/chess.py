@@ -3,14 +3,7 @@ __all__ = ["BaseChess"]
 from loguru import logger
 import typing as ty
 
-import torch
-from torchrl.envs import (
-    Compose,
-    StepCounter,
-    TransformedEnv,
-)
 from torchrl.envs import EnvBase
-from torchrl.modules import MLP, ConvNet
 
 from shark.env import ChessEnv, make_chess_env
 from ._base import BaseRL

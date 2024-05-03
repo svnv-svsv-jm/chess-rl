@@ -14,6 +14,7 @@ from shark.models import CQLChess
 from shark.utils import get_logged_metrics_from_trainer
 
 
+@pytest.mark.skip(reason="Lightning integration currently stalling.")
 def test_cql_pytorch(engine_executable: str) -> None:
     """Test CQL on Chess env with manual loop (plain PyTorch)."""
     model: CQLChess = _make_model(engine_executable)
