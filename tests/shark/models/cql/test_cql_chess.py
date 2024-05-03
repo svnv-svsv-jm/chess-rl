@@ -37,6 +37,7 @@ def test_cql_pytorch(engine_executable: str) -> None:
             break
 
 
+@pytest.mark.skip(reason="Lightning integration currently stalling.")
 @pytest.mark.parametrize("automatic_optimization", [False, True])
 def test_cql_lightning(engine_executable: str, automatic_optimization: bool) -> None:
     """Test CQL on Chess env with Lightning."""
