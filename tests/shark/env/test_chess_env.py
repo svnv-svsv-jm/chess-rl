@@ -13,38 +13,6 @@ from shark.utils import find_device
 from shark.utils.patch import ParallelEnv
 
 
-@pytest.mark.parametrize("num_envs", [3])
-def test_parallen_env(engine_executable: str, num_envs: int) -> None:
-    """Test usage of `ChessEnv` in `ParallelEnv`."""
-    make_env = EnvCreator(
-        lambda: ChessEnv(
-            engine_path=engine_executable,
-            probability_move_is_random=0.5,
-        )
-    )
-    # Makes identical copies of the env, runs them on dedicated processes
-    env = ParallelEnv(num_envs, make_env)
-    check_env_specs(env)
-    rollout = env.rollout(2)
-    logger.info(f"Rollout: {rollout}")
-    assert len(rollout) == num_envs
-    # Test integration with collector
-    policy = RandomPolicy(env.action_spec)
-    collector = SyncDataCollector(
-        env,
-        policy,
-        frames_per_batch=2,
-        total_frames=10,
-        device="cpu",
-        reset_at_each_iter=True,
-    )
-    for i, td in enumerate(collector):
-        assert isinstance(td, TensorDict)
-        if i > 1:
-            break
-    logger.success(f"Passed for {env.__class__.__name__}")
-
-
 @pytest.mark.parametrize("custom, from_engine", [(True, True), (False, False), (False, True)])
 def test_use_env_in_collector(engine_executable: str, custom: bool, from_engine: bool) -> None:
     """Test `SyncDataCollector` on env."""

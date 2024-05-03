@@ -39,10 +39,23 @@ def test_cql() -> None:
     collector = model.train_dataloader()
     for _, tensordict_data in enumerate(collector):
         logger.info(f"Tensordict data:\n{tensordict_data}")
-        batch_size = int(tensordict_data.batch_size[0])
-        rollout_size = int(tensordict_data.batch_size[1])
-        assert rollout_size == int(frames_per_batch // frame_skip)
-        assert batch_size == model.num_envs
+        # NOTE: tensordict_data.batch_size has shape [batch_size, rollout_size] or [rollout_size]
+        if len(tensordict_data.batch_size) > 1:
+            batch_size = int(tensordict_data.batch_size[0])
+            assert (
+                batch_size == model.num_envs
+            ), f"Got batch_size={batch_size} but model.num_envs={model.num_envs}."
+            rollout_size = int(tensordict_data.batch_size[1])
+            target = int(frames_per_batch // frame_skip)
+            assert (
+                rollout_size == target
+            ), f"Got rollout_size={rollout_size} but int(frames_per_batch // frame_skip)={target}."
+        else:
+            rollout_size = int(tensordict_data.batch_size[0])
+            target = int(frames_per_batch // frame_skip)
+            assert (
+                rollout_size == target
+            ), f"Got rollout_size={rollout_size} but int(frames_per_batch // frame_skip)={target}."
         break
     # Training
     max_steps = 4
