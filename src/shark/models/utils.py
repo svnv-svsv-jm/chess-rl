@@ -14,6 +14,18 @@ from shark.env import ChessEnv
 from shark.nn import CQLCritic
 
 
+class ToDevice(torch.nn.Module):
+    """Fucking cast to device."""
+
+    def __init__(self, device: torch.device) -> None:
+        super().__init__()
+        self._cast_device = device
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Casts to device."""
+        return x.to(self._cast_device)
+
+
 def make_chess_actor_critic(
     base_env: ChessEnv,
     n_mlp_layers: int = 3,
@@ -57,6 +69,7 @@ def make_chess_actor_critic(
     Returns:
         ty.Tuple[torch.nn.Module, torch.nn.Module]: _description_
     """
+    # Set up
     out_features = base_env.action_spec.shape[-1]
     if isinstance(num_cells, (float, int)):
         num_cells = int(num_cells)
@@ -74,12 +87,20 @@ def make_chess_actor_critic(
         strides=strides,
         paddings=paddings,
     )
-    actor_nn = torch.nn.Sequential(
+    # Actor
+    actor_nn_ = torch.nn.Sequential(
         ConvNet(**cnn_kwargs),
         MLP(out_features=out_features_multiplier * out_features, **mlp_kwargs),
     )
+    actor_nn = torch.nn.Sequential(ToDevice(next(actor_nn_.parameters()).device), actor_nn_)
+    # Critic
     value_nn: torch.nn.Module
-    if critic_type in ["ppo", "state", "observation"]:
+    critic_type = critic_type.lower()
+    if critic_type in [
+        "ppo",
+        "state",
+        "observation",
+    ]:
         value_nn = torch.nn.Sequential(
             ConvNet(**cnn_kwargs),
             MLP(out_features=1, **mlp_kwargs),
@@ -97,6 +118,7 @@ def make_chess_actor_critic(
         )
     else:
         raise ValueError(f"Unrecognized critic type {critic_type}")
+    # Return
     return actor_nn, value_nn
 
 
@@ -226,7 +248,15 @@ def initialize_actor(
 ) -> TensorDictModule:
     # Q-Value actor
     if qvalue:
-        policy_module = QValueActor(actor_nn, in_keys=["observation"], action_space=env.action_spec)
+        actor_net = torch.nn.Sequential(
+            ToDevice(next(actor_nn.parameters()).device),
+            actor_nn,
+        )
+        policy_module = QValueActor(
+            actor_net,
+            in_keys=["observation"],
+            action_space=env.action_spec,
+        )
 
     # No Q-Value
     else:
@@ -234,6 +264,7 @@ def initialize_actor(
         out_features = action_space.shape[-1]
         logger.debug(f"MLP out_shape: {out_features}")
         actor_net = torch.nn.Sequential(
+            ToDevice(next(actor_nn.parameters()).device),
             torch.nn.Flatten(0) if flatten_state else torch.nn.Identity(),
             actor_nn,
             NormalParamExtractor(),
@@ -244,7 +275,7 @@ def initialize_actor(
             in_keys=["observation"],
             out_keys=["loc", "scale"],
         )
-        td = env.reset()
+        td = env.reset().to(policy_module.device)
         policy_module(td)
         policy_module = ProbabilisticActor(
             module=policy_module,

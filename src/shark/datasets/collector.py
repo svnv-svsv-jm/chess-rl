@@ -4,6 +4,7 @@ from loguru import logger
 import typing as ty
 import torch
 from torch.utils.data import IterableDataset
+from torchrl.data import MultiStep
 from torchrl.collectors import SyncDataCollector, MultiSyncDataCollector, MultiaSyncDataCollector
 from torchrl.data.replay_buffers import ReplayBuffer
 from torchrl.data.replay_buffers.samplers import SamplerWithoutReplacement
@@ -29,6 +30,7 @@ class CollectorDataset(IterableDataset):
         batch_size: int = 1,
         init_random_frames: int = 1,
         collector_type: str = "sync",
+        postproc: ty.Optional[torch.nn.Module] = MultiStep(gamma=0.98, n_steps=5),
         **kwargs: ty.Any,
     ) -> None:
         # Attributes
@@ -54,6 +56,7 @@ class CollectorDataset(IterableDataset):
             storing_device=self.device,
             split_trajs=split_trajs,
             init_random_frames=init_random_frames,
+            postproc=postproc,
         )
         params.update(kwargs)
         # Collector

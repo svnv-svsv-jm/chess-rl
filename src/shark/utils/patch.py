@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 __all__ = [
     "EnvBase",
     "ParallelEnv",
@@ -7,7 +9,6 @@ __all__ = [
     "transform_observation_spec",
 ]
 
-from collections import OrderedDict
 from loguru import logger
 import typing as ty
 import torch

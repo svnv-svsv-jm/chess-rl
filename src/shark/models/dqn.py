@@ -96,17 +96,14 @@ class DQN(pl.LightningModule):
         for _ in range(steps):
             self.agent.play_step(self.net, epsilon=1.0)
 
-    def forward(
-        self,
-        x: Tensor,
-    ) -> Tensor:
+    def forward(self, x: Tensor) -> Tensor:
         """Passes in a state x through the network and gets the q_values of each action as an output
 
         Args:
-            x: environment state.
+            x (Tensor): environment state.
 
         Returns:
-            q values
+            (Tensor): q values
         """
         output: Tensor = self.net(x)
         return output

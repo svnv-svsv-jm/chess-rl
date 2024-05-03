@@ -4,7 +4,6 @@ from loguru import logger
 import typing as ty
 
 import torch
-from tensordict.nn import TensorDictModule
 from torchrl.envs import EnvBase, GymEnv
 
 from .loops import RLTrainingLoop

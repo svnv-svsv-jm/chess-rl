@@ -10,10 +10,19 @@ from torchrl.envs import GymEnv
 from shark.env import ChessEnv
 from shark.datasets import CollectorDataset
 from shark.utils import find_device
+from shark.models.utils import initialize_actor, make_chess_actor_critic
 
 
-@pytest.mark.parametrize("builtin", [True, False])
-def test_collector(engine_executable: str, builtin: bool) -> None:
+@pytest.mark.parametrize(
+    "builtin, random_policy",
+    [
+        (True, True),
+        (False, True),
+        (True, False),
+        (False, False),
+    ],
+)
+def test_collector(engine_executable: str, builtin: bool, random_policy: bool) -> None:
     """Test `CollectorDataset` on built-in gym envs."""
     device = find_device()
     env = (
@@ -26,7 +35,16 @@ def test_collector(engine_executable: str, builtin: bool) -> None:
         )
     )
     env.set_seed(0)
-    policy = RandomPolicy(env.action_spec)
+    if random_policy or not isinstance(env, ChessEnv):
+        policy = RandomPolicy(env.action_spec)
+    else:
+        actor_nn, _ = make_chess_actor_critic(env)
+        policy = initialize_actor(
+            actor_nn=actor_nn,
+            env=env,
+            flatten_state=False,
+            qvalue=False,
+        )
     collector = CollectorDataset(
         env,
         policy,

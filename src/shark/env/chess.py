@@ -201,6 +201,7 @@ class ChessEnv(EnvBase):
         self.n_states = int(state.size(-1))
         action_space, self.action_map = move_action_space()
         self.n_actions = int(action_space.size(-1))
+        # State and action
         if self.use_one_hot:
             # Action is a one-hot tensor
             self.action_spec = OneHotDiscreteTensorSpec(
