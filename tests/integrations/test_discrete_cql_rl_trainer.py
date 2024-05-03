@@ -108,8 +108,8 @@ def test_discretecql_w_chess(
     action: torch.Tensor = actor_nn(observation)
     logger.info(f"Action: {action.size()}")
     # Set up
-    actor = QValueActor(actor_nn, in_keys=["observation"], action_space=env.action_spec)
-    loss_module = DiscreteCQLLoss(actor, action_space=env.action_spec)
+    policy_module = QValueActor(actor_nn, in_keys=["observation"], action_space=env.action_spec)
+    loss_module = DiscreteCQLLoss(policy_module, action_space=env.action_spec)
     loss = loss_module(td)
     logger.info(f"Loss: {loss}")
     # Set up for training
@@ -121,7 +121,7 @@ def test_discretecql_w_chess(
         device = torch.device("cpu")
         collector = _make_collector(
             engine_executable=engine_executable,
-            actor=actor,
+            actor=policy_module,
             num_collectors=num_collectors,
             device=device,
             collector_type=collector_type,
@@ -152,7 +152,7 @@ def test_discretecql_w_chess(
                 record_interval=5,  # log every 100 optimization steps
                 record_frames=50,  # maximum number of frames in the record
                 frame_skip=1,
-                policy_exploration=actor,
+                policy_exploration=policy_module,
                 environment=env,
                 exploration_type=ExplorationType.MODE,
                 log_keys=[("next", "reward")],

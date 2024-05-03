@@ -1,11 +1,12 @@
-__all__ = ["make_chess_actor_critic", "initialize"]
+__all__ = ["make_chess_actor_critic", "initialize", "initialize_actor"]
 
 import typing as ty
 from loguru import logger
 import torch
 from tensordict.nn import TensorDictModule
+from tensordict.nn.distributions import NormalParamExtractor
 from torchrl.envs import EnvBase
-from torchrl.modules import ValueOperator, MLP, ConvNet
+from torchrl.modules import ProbabilisticActor, TanhNormal, QValueActor, ValueOperator, MLP, ConvNet
 from torchrl.objectives.value import GAE
 from torchrl.objectives import ClipPPOLoss, CQLLoss, DiscreteCQLLoss, SoftUpdate
 
@@ -116,6 +117,33 @@ def initialize(
     samples_mc_entropy: int = 1,
     entropy_coef: float = 0.01,
 ) -> ty.Dict[str, ty.Optional[TensorDictModule]]:
+    """_summary_
+
+    Args:
+        policy_module (TensorDictModule): _description_
+        env (EnvBase): _description_
+        model (str): _description_
+        discrete (bool, optional): _description_. Defaults to True.
+        value_nn (torch.nn.Module, optional): _description_. Defaults to None.
+        flatten_state (bool, optional): _description_. Defaults to False.
+        loss_function (str, optional): _description_. Defaults to "smooth_l1".
+        alpha_init (float, optional): _description_. Defaults to 1.
+        tau (float, optional): _description_. Defaults to None.
+        gamma (float, optional): _description_. Defaults to None.
+        lmbda (float, optional): _description_. Defaults to None.
+        clip_epsilon (float, optional): _description_. Defaults to 0.2.
+        entropy_bonus (bool, optional): _description_. Defaults to True.
+        samples_mc_entropy (int, optional): _description_. Defaults to 1.
+        entropy_coef (float, optional): _description_. Defaults to 0.01.
+
+    Raises:
+        ValueError: _description_
+        ValueError: _description_
+        ValueError: _description_
+
+    Returns:
+        ty.Dict[str, ty.Optional[TensorDictModule]]: _description_
+    """
     target_net_updater = None
     value_module = None
     if model in ["cql"]:
@@ -188,3 +216,49 @@ def initialize(
         value_module=value_module,
         target_net_updater=target_net_updater,
     )
+
+
+def initialize_actor(
+    actor_nn: torch.nn.Module,
+    env: EnvBase,
+    flatten_state: bool = False,
+    qvalue: bool = False,
+) -> TensorDictModule:
+    # Q-Value actor
+    if qvalue:
+        policy_module = QValueActor(actor_nn, in_keys=["observation"], action_space=env.action_spec)
+
+    # No Q-Value
+    else:
+        action_space = env.action_spec
+        out_features = action_space.shape[-1]
+        logger.debug(f"MLP out_shape: {out_features}")
+        actor_net = torch.nn.Sequential(
+            torch.nn.Flatten(0) if flatten_state else torch.nn.Identity(),
+            actor_nn,
+            NormalParamExtractor(),
+        )
+        logger.debug(f"Initialized actor: {actor_net}")
+        policy_module = TensorDictModule(
+            actor_net,
+            in_keys=["observation"],
+            out_keys=["loc", "scale"],
+        )
+        td = env.reset()
+        policy_module(td)
+        policy_module = ProbabilisticActor(
+            module=policy_module,
+            spec=env.action_spec,
+            in_keys=["loc", "scale"],
+            distribution_class=TanhNormal,
+            distribution_kwargs={
+                "min": 0,  # env.action_spec.space.minimum,
+                "max": 1,  # env.action_spec.space.maximum,
+            },
+            return_log_prob=True,  # we'll need the log-prob for the numerator of the importance weights
+        )
+
+    # Initialize and return
+    td = env.reset()
+    policy_module(td)
+    return policy_module

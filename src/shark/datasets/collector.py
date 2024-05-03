@@ -3,8 +3,8 @@ __all__ = ["CollectorDataset"]
 from loguru import logger
 import typing as ty
 import torch
-from torch.utils.data import IterableDataset, Dataset
-from torchrl.collectors import SyncDataCollector
+from torch.utils.data import IterableDataset
+from torchrl.collectors import SyncDataCollector, MultiSyncDataCollector, MultiaSyncDataCollector
 from torchrl.data.replay_buffers import ReplayBuffer
 from torchrl.data.replay_buffers.samplers import SamplerWithoutReplacement
 from torchrl.data.replay_buffers.storages import LazyTensorStorage
@@ -20,7 +20,7 @@ class CollectorDataset(IterableDataset):
 
     def __init__(
         self,
-        env: EnvBase,
+        env: EnvBase | ty.Sequence[ty.Callable[..., EnvBase]],
         policy_module: TensorDictModule,
         frames_per_batch: int,
         total_frames: int,
@@ -28,6 +28,8 @@ class CollectorDataset(IterableDataset):
         split_trajs: bool = False,
         batch_size: int = 1,
         init_random_frames: int = 1,
+        collector_type: str = "sync",
+        **kwargs: ty.Any,
     ) -> None:
         # Attributes
         self.batch_size = batch_size
@@ -36,10 +38,16 @@ class CollectorDataset(IterableDataset):
         self.policy_module = policy_module
         self.frames_per_batch = frames_per_batch
         self.total_frames = total_frames
-        # Collector
-        self.collector = SyncDataCollector(
-            self.env,
-            self.policy_module,
+        self.collector_type = collector_type
+        # Get num envs
+        num_collectors = 1
+        if isinstance(self.env, ty.Sequence):
+            num_collectors = len(self.env)
+        self.num_collectors = num_collectors
+        # Collector's params
+        params = dict(
+            create_env_fn=self.env,
+            policy=self.policy_module,
             frames_per_batch=self.frames_per_batch,
             total_frames=self.total_frames,
             device=self.device,
@@ -47,6 +55,16 @@ class CollectorDataset(IterableDataset):
             split_trajs=split_trajs,
             init_random_frames=init_random_frames,
         )
+        params.update(kwargs)
+        # Collector
+        if collector_type in ["sync"] or self.num_collectors < 2:
+            self.collector = SyncDataCollector(**params)
+        elif collector_type in ["multi", "multi-sync", "multisync"]:
+            self.collector = MultiSyncDataCollector(**params)
+        elif collector_type in ["multiasync", "multi-async"]:
+            self.collector = MultiaSyncDataCollector(**params)
+        else:
+            raise ValueError(f"Invalid collector type {collector_type}.")
         # ReplayBuffer
         self.replay_buffer = ReplayBuffer(
             storage=LazyTensorStorage(frames_per_batch),

@@ -16,7 +16,7 @@ from shark.utils import get_logged_metrics_from_trainer
 
 def test_cql_pytorch(engine_executable: str) -> None:
     """Test CQL on Chess env with manual loop (plain PyTorch)."""
-    model = _make_model(engine_executable)
+    model: CQLChess = _make_model(engine_executable)
     # Try to manually run training loop
     # So we can decouple implementation from Lightning errors
     loader = model.train_dataloader()
@@ -62,7 +62,6 @@ def test_cql_lightning(engine_executable: str, automatic_optimization: bool) -> 
 def _make_model(engine_executable: str, automatic_optimization: bool = True) -> CQLChess:
     model = CQLChess(
         engine_executable=engine_executable,
-        critic_type="observation",
         depth=1,
         n_mlp_layers=1,
         num_mlp_cells=32,
@@ -73,7 +72,6 @@ def _make_model(engine_executable: str, automatic_optimization: bool = True) -> 
         env_kwargs=dict(lose_on_illegal_move=False, probability_move_is_random=0.5),
         num_envs=1,
         raise_error_on_nan=True,
-        discrete=True,
     )
     if model.discrete:
         assert isinstance(model.loss_module, DiscreteCQLLoss)

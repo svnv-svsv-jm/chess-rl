@@ -12,8 +12,7 @@ from torchrl.envs import (
 from torchrl.envs import EnvBase
 from torchrl.modules import MLP, ConvNet
 
-from shark.env import ChessEnv
-from shark.nn import CQLCritic
+from shark.env import ChessEnv, make_chess_env
 from ._base import BaseRL
 from .utils import make_chess_actor_critic
 
@@ -33,10 +32,11 @@ class BaseChess(BaseRL):
         paddings: ty.Sequence[int] | int = 0,
         critic_action_hidden_dim: int = 32,
         env_kwargs: ty.Dict[str, ty.Any] = {},
-        critic_type: str = "ppo",
+        critic_type: str = "observation",
         **kwargs: ty.Any,
     ) -> None:
         """Init."""
+        assert isinstance(engine_executable, str)
         self.engine_executable = engine_executable
         self.env_kwargs = env_kwargs.copy()
         base_env = ChessEnv(engine_executable, **self.env_kwargs)
@@ -55,20 +55,22 @@ class BaseChess(BaseRL):
         super().__init__(
             actor_nn=actor_nn,
             value_nn=value_nn,
+            discrete=True,
+            qvalue_actor=True,
             **kwargs,
         )
         self.env_name = f"{ChessEnv.__name__}"
 
     def make_env(self) -> EnvBase:
-        return ChessEnv(self.engine_executable, **self.env_kwargs)
+        return make_chess_env(self.engine_executable, **self.env_kwargs)
 
-    def transformed_env(self, base_env: EnvBase) -> EnvBase:
-        """Setup transformed environment."""
-        # return base_env
-        env = TransformedEnv(
-            base_env,
-            transform=Compose(
-                StepCounter(),
-            ),
-        )
-        return env
+    # def transformed_env(self, base_env: EnvBase) -> EnvBase:
+    #     """Setup transformed environment."""
+    #     # return base_env
+    #     env = TransformedEnv(
+    #         base_env,
+    #         transform=Compose(
+    #             StepCounter(),
+    #         ),
+    #     )
+    #     return env

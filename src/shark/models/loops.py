@@ -45,6 +45,7 @@ class RLTrainingLoop(pl.LightningModule):
         raise_error_on_nan: bool = False,
         num_envs: int = 1,
         env_kwargs: ty.Dict[str, ty.Any] = {},
+        parallel: bool = False,
     ) -> None:
         """
         Args:
@@ -93,11 +94,14 @@ class RLTrainingLoop(pl.LightningModule):
         self.rollout_max_steps = rollout_max_steps
         self.num_envs = num_envs
         # Environment
-        self.env = ParallelEnv(
-            num_workers=num_envs,
-            create_env_fn=EnvCreator(self._make_env),
-            serial_for_single=True,
-        )
+        if parallel:
+            self.env = ParallelEnv(
+                num_workers=num_envs,
+                create_env_fn=EnvCreator(self._make_env),
+                serial_for_single=True,
+            )
+        else:
+            self.env = self._make_env()
         # Patch this method with your function
         self.env.step_and_maybe_reset = lambda arg: step_and_maybe_reset(self.env, arg)
         # Sanity check

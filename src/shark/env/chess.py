@@ -39,6 +39,7 @@ def make_chess_env(
     engine_executable: str,
     num_workers: int = 1,
     parallel: bool = False,
+    **params: ty.Any,
 ) -> TransformedEnv:
     """Helper to create a chess environment.
 
@@ -63,9 +64,12 @@ def make_chess_env(
         TransformedEnv: Chess environment.
     """
     if parallel:
-        base_env = ParallelEnv(num_workers, EnvCreator(lambda: ChessEnv(engine_executable)))
+        base_env = ParallelEnv(
+            num_workers,
+            EnvCreator(lambda: ChessEnv(engine_executable, **params)),
+        )
     else:
-        base_env = ChessEnv(engine_executable)
+        base_env = ChessEnv(engine_executable, **params)
     env = TransformedEnv(
         base_env,
         Compose(

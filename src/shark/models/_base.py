@@ -5,14 +5,10 @@ import typing as ty
 
 import torch
 from tensordict.nn import TensorDictModule
-from tensordict.nn.distributions import NormalParamExtractor
 from torchrl.envs import EnvBase, GymEnv
-from torchrl.modules import ProbabilisticActor, TanhNormal, ValueOperator
-from torchrl.objectives.value import GAE
-from torchrl.objectives import ClipPPOLoss, CQLLoss, DiscreteCQLLoss, SoftUpdate
 
 from .loops import RLTrainingLoop
-from .utils import initialize
+from .utils import initialize, initialize_actor
 
 
 class BaseRL(RLTrainingLoop):
@@ -33,6 +29,7 @@ class BaseRL(RLTrainingLoop):
         flatten_state: bool = False,
         tau: float = 1e-2,
         discrete: bool = False,
+        qvalue_actor: bool = False,
         **kwargs: ty.Any,
     ) -> None:
         """
@@ -85,7 +82,6 @@ class BaseRL(RLTrainingLoop):
         env = self.transformed_env(base_env)
         # Specs
         observation_spec = base_env.observation_spec["observation"]
-        action_space = base_env.action_spec
         # Sanity check
         logger.debug(f"observation_spec: {observation_spec}")
         logger.debug(f"reward_spec: {base_env.reward_spec}")
@@ -93,31 +89,11 @@ class BaseRL(RLTrainingLoop):
         logger.debug(f"action_spec: {base_env.action_spec}")
         logger.debug(f"state_spec: {base_env.state_spec}")
         # Actor
-        out_features = action_space.shape[-1]
-        logger.debug(f"MLP out_shape: {out_features}")
-        actor_net = torch.nn.Sequential(
-            torch.nn.Flatten(0) if flatten_state else torch.nn.Identity(),
-            actor_nn,
-            NormalParamExtractor(),
-        )
-        logger.debug(f"Initialized actor: {actor_net}")
-        policy_module = TensorDictModule(
-            actor_net,
-            in_keys=["observation"],
-            out_keys=["loc", "scale"],
-        )
-        td = env.reset()
-        policy_module(td)
-        policy_module = ProbabilisticActor(
-            module=policy_module,
-            spec=env.action_spec,
-            in_keys=["loc", "scale"],
-            distribution_class=TanhNormal,
-            distribution_kwargs={
-                "min": 0,  # env.action_spec.space.minimum,
-                "max": 1,  # env.action_spec.space.maximum,
-            },
-            return_log_prob=True,  # we'll need the log-prob for the numerator of the importance weights
+        policy_module = initialize_actor(
+            actor_nn=actor_nn,
+            env=env,
+            flatten_state=flatten_state,
+            qvalue=qvalue_actor,
         )
         logger.debug(f"Initialized policy: {policy_module}")
         # Critic and loss depend on the model
