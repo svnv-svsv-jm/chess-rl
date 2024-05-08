@@ -69,17 +69,19 @@ def step_and_maybe_reset(
     This method allows to easily code non-stopping rollout functions.
 
     Examples:
-        >>> from torchrl.envs import ParallelEnv, GymEnv
-        >>> def rollout(env, n):
-        ...     data_ = env.reset()
-        ...     result = []
-        ...     for i in range(n):
-        ...         data, data_ = env.step_and_maybe_reset(data_)
-        ...         result.append(data)
-        ...     return torch.stack(result)
-        >>> env = ParallelEnv(2, lambda: GymEnv("CartPole-v1"))
-        >>> print(rollout(env, 2))
-        TensorDict(
+        ```python
+        from torchrl.envs import ParallelEnv, GymEnv
+        def rollout(env, n):
+            data_ = env.reset()
+            result = []
+            for i in range(n):
+                data, data_ = env.step_and_maybe_reset(data_)
+                result.append(data)
+            return torch.stack(result)
+        env = ParallelEnv(2, lambda: GymEnv("CartPole-v1"))
+        print(rollout(env, 2))
+        ```
+        >>> TensorDict(
             fields={
                 done: Tensor(shape=torch.Size([2, 2, 1]), device=cpu, dtype=torch.bool, is_shared=False),
                 next: TensorDict(
@@ -99,10 +101,19 @@ def step_and_maybe_reset(
             device=cpu,
             is_shared=False)
     """
-    logger.trace(f"step_and_maybe_reset...")
+    # # Original code
+    # tensordict = self.step(tensordict)
+    # # done and truncated are in done_keys
+    # # We read if any key is done.
+    # tensordict_ = self._step_mdp(tensordict)
+    # tensordict_ = self.maybe_reset(tensordict_)
+    # return tensordict, tensordict_
+    # Go
+    logger.trace(f"Running patched `step_and_maybe_reset`...")
     action: torch.Tensor = tensordict["action"]
-    logger.trace(f"{action.size()}")
-    assert action.size() == self.action_spec.shape, f"{self.action_spec.shape} but {action.size()}"
+    logger.trace(f"action ({action.dtype}): {action.size()}")
+    if action.size() != self.action_spec.shape:
+        raise RuntimeError(f"{self.action_spec.shape} but {action.size()}")
     tensordict = self.step(tensordict)
     # done and truncated are in done_keys
     # We read if any key is done.
@@ -122,10 +133,6 @@ def step_and_maybe_reset(
     )
     if any_done:
         tensordict_ = self.reset(tensordict_)
-    # if isinstance(tensordict, (TensorDict, TensorDictBase)):
-    #     assert "reward" in tensordict.keys(), f"{tensordict}"
-    # if isinstance(tensordict_, (TensorDict, TensorDictBase)):
-    #     assert "reward" in tensordict_.keys(), f"{tensordict_}"
     logger.trace(f"tensordict: {tensordict}")
     logger.trace(f"tensordict_: {tensordict_}")
     return tensordict, tensordict_

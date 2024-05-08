@@ -29,10 +29,14 @@ def board_to_tensor(board: chess.Board, flatten: bool) -> Tensor:
         board (chess.Board):
             Chess board to convert to tensor.
 
-    Returns:
-        Tensor: (8,8,13)
-            Tensor representation of the chess board. In each 8x8 square, there are 12 possible pieces or it is an empty square.
+        flatten (bool):
+            Whether to flatten the board tensor or not.
 
+    Returns:
+        Tensor:
+            Tensor representation of the chess board.
+            In each 8x8 square, there are 12 possible pieces or it is an empty square.
+            The shape of this tensor is `(8,8,13)` if `flatten==False`, else it will be `(8*8*13,)`.
     """
     piece_dict = {
         FREE_SQUARE: 0,
@@ -49,17 +53,17 @@ def board_to_tensor(board: chess.Board, flatten: bool) -> Tensor:
         QUEEN_WHITE: 11,
         KING_WHITE: 12,
     }
-    tensor = torch.zeros((8, 8, len(list(piece_dict.values())))).long()
+    board_tensor = torch.zeros((8, 8, len(list(piece_dict.values())))).long()
     for i in range(8):
         for j in range(8):
             square = chess.square(i, j)
             piece = board.piece_at(square)
-
+            # Fill in board tensor with correct values
             if piece is not None:
-                piece_type = piece.symbol()
-                tensor[i, j, piece_dict[piece_type]] = 1
+                piece_symbol = piece.symbol()
+                board_tensor[i, j, piece_dict[piece_symbol]] = 1
             else:
-                tensor[i, j, piece_dict[FREE_SQUARE]] = 1
+                board_tensor[i, j, piece_dict[FREE_SQUARE]] = 1
     if flatten:
-        tensor = tensor.flatten()
-    return tensor
+        board_tensor = board_tensor.flatten()
+    return board_tensor

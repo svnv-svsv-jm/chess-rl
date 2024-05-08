@@ -5,7 +5,7 @@ import typing as ty
 import torch
 from torch.utils.data import IterableDataset
 from torchrl.data import MultiStep
-from torchrl.collectors import SyncDataCollector, MultiSyncDataCollector, MultiaSyncDataCollector
+from torchrl.collectors import MultiSyncDataCollector, MultiaSyncDataCollector
 from torchrl.data.replay_buffers import ReplayBuffer
 from torchrl.data.replay_buffers.samplers import SamplerWithoutReplacement
 from torchrl.data.replay_buffers.storages import LazyTensorStorage
@@ -14,10 +14,11 @@ from tensordict.nn import TensorDictModule
 from tensordict import TensorDict
 
 from shark.utils import find_device
+from .patch import SyncDataCollector
 
 
 class CollectorDataset(IterableDataset):
-    """Iterable Dataset containing the `ReplayBuffer` which will be updated with new experiences during training, and the `SyncDataCollector`."""
+    """Iterable Dataset containing the `ReplayBuffer` which will be updated with new experiences during training, and the `SyncDataCollector | MultiSyncDataCollector | MultiaSyncDataCollector`."""
 
     def __init__(
         self,
@@ -74,8 +75,11 @@ class CollectorDataset(IterableDataset):
             sampler=SamplerWithoutReplacement(),
             batch_size=self.batch_size,
         )
-        # States
-        self.length: ty.Optional[int] = None
+
+    @property
+    def length(self) -> int:
+        """Size of dataset."""
+        return len(self.replay_buffer)
 
     # def __len__(self) -> int:
     #     """Return the number of experiences in the `ReplayBuffer`."""
@@ -95,7 +99,6 @@ class CollectorDataset(IterableDataset):
             data_view: TensorDict = tensordict_data.reshape(-1)
             self.replay_buffer.extend(data_view.cpu())
             yield tensordict_data.to(self.device)
-        self.length = i
 
     # def __getitem__(self, idx: int = None, **kwargs: ty.Any) -> TensorDict:
     #     """Sample from `ReplayBuffer`."""

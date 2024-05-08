@@ -81,7 +81,7 @@ class RLTrainingLoop(pl.LightningModule):
             ]
         )
         if not hasattr(self, "env_kwargs"):
-            self.env_kwargs = env_kwargs
+            self.env_kwargs = env_kwargs.copy()
         self.raise_error_on_nan = raise_error_on_nan
         self.use_checkpoint_callback = use_checkpoint_callback
         self.save_every_n_train_steps = save_every_n_train_steps

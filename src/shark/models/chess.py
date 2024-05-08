@@ -28,7 +28,43 @@ class BaseChess(BaseRL):
         critic_type: str = "observation",
         **kwargs: ty.Any,
     ) -> None:
-        """Init."""
+        """
+        Args:
+            engine_executable (str, optional):
+                Path to the chess engine executable. Defaults to `None`.
+
+            n_mlp_layers (int, optional):
+                Number of MLP layers. Defaults to `3`.
+
+            num_mlp_cells (ty.Sequence[int] | int, optional):
+                Number of MLP cells (MLP hidden dimension). Defaults to `256`.
+
+            depth (int, optional):
+                Depth for the CNN layers. Defaults to `3`.
+
+            num_cells (ty.Sequence[int] | int, optional):
+                Number of CNN cells (CNN hidden dimension). Defaults to `256`.
+
+            kernel_sizes (ty.Sequence[int | ty.Sequence[int]] | int, optional):
+                Kernel size for the CNN layers. Defaults to `3`.
+
+            strides (ty.Sequence[int] | int, optional):
+                Strides for the CNN layers. Defaults to `1`.
+
+            paddings (ty.Sequence[int] | int, optional):
+                Paddings for the CNN layers. Defaults to `0`.
+
+            critic_action_hidden_dim (int, optional):
+                Hidden dimension for the action critic. Defaults to `32`.
+
+            env_kwargs (ty.Dict[str, ty.Any], optional):
+                Key-word arguments for the chess environment. Defaults to `{}`.
+
+            critic_type (str, optional):
+                Type of critic.
+                Possible choices include: `"observation"`, `"observation-action"`.
+                Defaults to `"observation"`.
+        """
         assert isinstance(engine_executable, str)
         self.engine_executable = engine_executable
         self.env_kwargs = env_kwargs.copy()
@@ -56,14 +92,3 @@ class BaseChess(BaseRL):
 
     def make_env(self) -> EnvBase:
         return make_chess_env(self.engine_executable, **self.env_kwargs)
-
-    # def transformed_env(self, base_env: EnvBase) -> EnvBase:
-    #     """Setup transformed environment."""
-    #     # return base_env
-    #     env = TransformedEnv(
-    #         base_env,
-    #         transform=Compose(
-    #             StepCounter(),
-    #         ),
-    #     )
-    #     return env

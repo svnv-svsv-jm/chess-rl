@@ -31,8 +31,7 @@ from shark.utils import (
     remove_illegal_move,
 )
 from shark.utils.patch import EnvBase
-
-WORST_REWARD = -1e3
+from .const import BEST_REWARD, WORST_REWARD
 
 
 def make_chess_env(
@@ -93,6 +92,7 @@ class ChessEnv(EnvBase):
         play_vs_engine: bool = True,
         mate_amplifier: float = 10,
         softmax: bool = False,
+        best_reward: float = BEST_REWARD,
         worst_reward: float = WORST_REWARD,
         illegal_amplifier: float = 100,
         lose_on_illegal_move: bool = True,
@@ -144,8 +144,11 @@ class ChessEnv(EnvBase):
                 This is useful, yet not necessary, when your agent outputs logits.
                 Defaults to `False`.
 
-            worst_reward (float, optional):
-                Value for the worst reward possible, e.g. when losing a game. Defaults to `WORST_REWARD`.
+            best_reward (float, optional): Defaults to `BEST_REWARD`.
+                Value for the best reward possible, e.g. when winning a game.
+
+            worst_reward (float, optional): Defaults to `WORST_REWARD`.
+                Value for the worst reward possible, e.g. when losing a game.
 
             illegal_amplifier (float, optional):
                 Reward amplifier when an illegal move is selected.
@@ -171,7 +174,7 @@ class ChessEnv(EnvBase):
 
             probability_move_is_random (float, optional):
                 Probability that a move is chosen randomly rather than from the engine.
-                Pass a value `0 < x < 1`.
+                Pass a value `0 < probability_move_is_random < 1`.
                 Defaults to `None`, meaning this will be ignored.
         """
         super().__init__(**kwargs)  # call the constructor of the base class
@@ -179,6 +182,7 @@ class ChessEnv(EnvBase):
         self.probability_move_is_random = probability_move_is_random
         self.use_one_hot = use_one_hot
         self.illegal_amplifier = illegal_amplifier
+        self.best_reward = best_reward
         self.worst_reward = worst_reward
         self.softmax = softmax
         self.from_engine = from_engine
@@ -272,7 +276,7 @@ class ChessEnv(EnvBase):
         else:
             shape = torch.Size()
             device = self.device
-        # Sanity check, should not end up here
+        # Sanity check, should never end up here
         if device is None:
             device = self.device
         # Init chessboard
@@ -307,35 +311,38 @@ class ChessEnv(EnvBase):
         """The `_step()` method takes in a `TensorDict` from which it reads an action, applies the action and returns a new `TensorDict` containing the observation, reward and done signal for that timestep.
 
         Args:
-            tensordict (TensorDict): _description_
+            tensordict (TensorDict):
+                A `TensorDict` object from which we read an action and apply it.
 
         Returns:
-            TensorDict: _description_
+            TensorDict: new `TensorDict` containing the observation, reward and done signal for that timestep.
         """
         # Read action from input
         action: Tensor = tensordict["action"]
-        logger.trace(f"Reading action: {action.size()}")
+        if not isinstance(action, Tensor):
+            raise RuntimeError(f"Action must be a {Tensor}.")
+        logger.trace(f"Reading action ({action.dtype}|{action.device}): {action.size()}")
         device = action.device
         # Check if game is already over?
         if self.is_game_over():
-            # raise RuntimeError("How did you end up here?")
-            logger.warning(
+            msg = (
                 "How did you end up here? "
                 "This seems to happen when using a `SyncDataCollector`. "
                 "Is it possible the `SyncDataCollector` did not call `.reset()` even if `done==True`?"
             )
+            # raise RuntimeError(msg)
+            logger.warning(msg)
             outcome = self.board.outcome()
-            if outcome is None:
-                r = self.worst_reward
-            else:
-                if outcome.winner == self.is_white:
-                    r = -self.worst_reward
-                else:
-                    r = self.worst_reward
+            # We init reward as worst possible case, and change it only if we won
+            r = self.worst_reward
+            # We need to read the winner from the outcome object, which can be None
+            if outcome is not None and outcome.winner == self.is_white:
+                r = self.best_reward
                 if self.board.is_checkmate():
                     logger.debug(f"{self.board.outcome()}")
                     r = r * self.mate_amplifier
-            reward = reward = torch.Tensor([r]).to(self.reward_spec.dtype)
+            # Create reward tensor
+            reward = torch.Tensor([r]).to(self.reward_spec.dtype)
             # Return new TensorDict
             td = TensorDict(
                 {
@@ -353,8 +360,8 @@ class ChessEnv(EnvBase):
             len(list(self.board.legal_moves)) > 0
         ), f"No legal move to choose from: {self.board.outcome()}"
         # Convert action to one-hot and then to UCI
-        action = self._action_to_one_hot(action)
-        move = chess.Move.from_uci(action_one_hot_to_uci(action))
+        action_one_hot = self._action_to_one_hot(action)
+        move = chess.Move.from_uci(action_one_hot_to_uci(action_one_hot))
         # Check if legal
         is_legal = self.board.is_legal(move)
         logger.trace(f"Requested action {move} (legal={is_legal})")
@@ -364,7 +371,7 @@ class ChessEnv(EnvBase):
         # Remove illegal moves
         if not self.board.is_legal(move):
             logger.trace(f"Legalizing move {move}")
-            move = self.remove_illegal_move(action)
+            move = self.remove_illegal_move(action_one_hot)
             assert self.board.is_legal(move)
         # Apply move
         logger.trace(f"Pushing {move.uci()}")
@@ -433,21 +440,34 @@ class ChessEnv(EnvBase):
         logger.trace(f"Returning {td}")
         return td
 
-    def remove_illegal_move(self, action: torch.Tensor) -> chess.Move:
-        """Remove illegal moves."""
+    def remove_illegal_move(self, action_one_hot: torch.Tensor) -> chess.Move:
+        """Remove illegal moves.
+
+        Args:
+            action_one_hot (Tensor):
+                One-hot action tensor.
+
+        Returns:
+            (chess.Move):
+                Chess move object.
+        """
+        # Rename
+        a = action_one_hot
         # Softmax to have all positives
         if self.softmax:
-            action = action.softmax(-1)
-        action = remove_illegal_move(action, self.board, device=action.device)
+            a = a.softmax(-1)
+        a = remove_illegal_move(a, self.board, device=a.device)
         # Get action and its UCI
         # Action is a probability distribution over the action space
-        uci = action_one_hot_to_uci(action)
+        uci = action_one_hot_to_uci(a)
         move = chess.Move.from_uci(uci)
         logger.trace(f"Chosen new (legal) move {move}")
         return move
 
     def update_state(self) -> torch.Tensor:
-        """Update state."""
+        """Update state and convert one-hot state to discrete if necessary.
+        May also flatten the state.
+        Always call this."""
         state = board_to_tensor(self.board, flatten=self.flatten).to(self.observation_spec.dtype)
         state = self._one_hot_state_to_discrete(state)
         if self.flatten:
@@ -475,9 +495,10 @@ class ChessEnv(EnvBase):
         action = action_to_one_hot(move.uci(), chess_board=self.board)
         action = self._one_hot_action_to_discrete(action)
         action = action.to(self.action_spec.dtype)
+        action = action.to(self.device)
         # Return TensorDict
         td = TensorDict(
-            {"action": action.to(self.device)},
+            {"action": action},
             batch_size=torch.Size(),
             device=self.device,
         )
@@ -498,7 +519,7 @@ class ChessEnv(EnvBase):
         engine: SimpleEngine,
         board: chess.Board = None,
     ) -> float:
-        """Let engine evaluate the current position."""
+        """Let engine evaluate the current position and return it as reward."""
         if board is None:
             board = self.board
         logger.trace(f"Evaluating position with {self.engine_path}")
@@ -556,11 +577,10 @@ class ChessEnv(EnvBase):
 
         Args:
             engine (SimpleEngine, optional):
-                Engine in case opponent's is an engine. Defaults to None.
+                Engine in case opponent's is an engine.
 
-            board (chess.Board, optional): _description_. Defaults to None.
-
-            tensordict (TensorDictBase, optional): _description_. Defaults to None.
+            board (chess.Board, optional):
+                Defaults to `None`, meaning `self.board` will be used.
 
         Raises:
             RuntimeError: if no legal move is available for sampling (when playing vs random).
@@ -574,7 +594,8 @@ class ChessEnv(EnvBase):
         logger.trace("Opponent's move")
         if self.play_vs_engine and not self.is_move_random():
             # Check engine is available and push engine's move
-            assert engine is not None
+            if engine is None:
+                raise RuntimeError("No engine available. You chose to play vs the engine.")
             self._engine_move(engine=engine, board=board)
         else:
             # Play random move
@@ -604,11 +625,14 @@ class ChessEnv(EnvBase):
         Returns:
             A tensordict object with the "action" entry updated with a random sample from the action-spec.
         """
+        logger.trace(f"Sampling random action from: {tensordict}")
         out = self.sample()
+        logger.trace(f"Sampled random action: {out}")
         if tensordict is not None:
-            tensordict = tensordict.update(out, inplace=False)
+            tensordict.update(out, inplace=True)
         else:
             tensordict = out
+        logger.trace(f"Returning random action: {tensordict}")
         return tensordict
 
     # def _check_pawn_promotion(self, move: chess.Move) -> None:

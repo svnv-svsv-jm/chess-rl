@@ -198,7 +198,21 @@ def remove_illegal_move(
     board: chess.Board,
     device: torch.device = None,
 ) -> torch.Tensor:
-    """Remove illegal moves from the actions."""
+    """Remove illegal moves from the actions.
+
+    Args:
+        action_one_hot (Tensor):
+            One-hot action tensor.
+
+        board (chess.Board):
+            Chess board object.
+
+        device (torch.device, optional):
+            PyTorch device.
+
+    Returns:
+        (Tensor): One-hot action tensor.
+    """
     assert len(list(board.legal_moves)) > 0, f"No legal move to choose from: {board.outcome()}"
     # Check device
     if device is None:
