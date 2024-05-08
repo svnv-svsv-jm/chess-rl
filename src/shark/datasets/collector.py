@@ -79,16 +79,10 @@ class CollectorDataset(IterableDataset):
     @property
     def length(self) -> int:
         """Size of dataset."""
-        return len(self.replay_buffer)
-
-    # def __len__(self) -> int:
-    #     """Return the number of experiences in the `ReplayBuffer`."""
-    #     if self.length is not None:
-    #         return self.length
-    #     L = len(self.replay_buffer)
-    #     if self.total_frames > L:
-    #         return self.total_frames
-    #     return L
+        L = len(self.replay_buffer)
+        if self.total_frames > L:
+            return self.total_frames
+        return L
 
     def __iter__(self) -> ty.Iterator[TensorDict]:
         """Yield experiences from `SyncDataCollector` and store them in `ReplayBuffer`."""
@@ -99,10 +93,6 @@ class CollectorDataset(IterableDataset):
             data_view: TensorDict = tensordict_data.reshape(-1)
             self.replay_buffer.extend(data_view.cpu())
             yield tensordict_data.to(self.device)
-
-    # def __getitem__(self, idx: int = None, **kwargs: ty.Any) -> TensorDict:
-    #     """Sample from `ReplayBuffer`."""
-    #     return self.sample(**kwargs)
 
     def sample(self, **kwargs: ty.Any) -> TensorDict:
         """Sample from `ReplayBuffer`."""

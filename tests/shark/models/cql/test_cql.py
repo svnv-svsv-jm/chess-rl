@@ -57,6 +57,16 @@ def test_cql() -> None:
                 rollout_size == target
             ), f"Got rollout_size={rollout_size} but int(frames_per_batch // frame_skip)={target}."
         break
+    # Manual step
+    for _, batch in enumerate(model.train_dataloader()):
+        model.advantage(batch)
+        subdata = model.replay_buffer.sample(model.sub_batch_size)
+        logger.info(f"Sampled data: {subdata}")
+        loss_vals = model.loss(subdata.to(model.device))
+        loss, losses = model.collect_loss(loss_vals)
+        assert not loss.isnan().any()
+        logger.info(losses)
+        break
     # Training
     max_steps = 4
     trainer = pl.Trainer(
