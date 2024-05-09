@@ -61,7 +61,6 @@ def make_collector(
 
 
 def make_chess_collector(
-    *args: ty.Any,
     engine_executable: str,
     num_workers: int,
     parallel: bool,
@@ -69,7 +68,7 @@ def make_chess_collector(
 ) -> DataCollectorBase:
     """Create data collector."""
     return make_collector(
-        *args,
+        create_env_fn=make_chess_env,
         engine_executable=engine_executable,
         num_workers=num_workers,
         parallel=parallel,
