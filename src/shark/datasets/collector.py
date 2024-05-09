@@ -17,23 +17,32 @@ from shark.env import make_chess_env
 from shark.utils import find_device
 from .patch import SyncDataCollector
 
+_CREATE_ENV_FN_TYPE = ty.Callable[..., EnvBase]
+
 
 def make_collector(
-    create_env_fn: ty.Callable[..., EnvBase],
+    create_env_fn: EnvBase | _CREATE_ENV_FN_TYPE | ty.Sequence[_CREATE_ENV_FN_TYPE],
     actor: TensorDictModule,
-    num_collectors: int,
     device: torch.device,
     collector_type: str,
-    # num_workers: int,
-    # parallel: bool,
+    num_collectors: int = 1,
     **kwargs: ty.Any,
 ) -> DataCollectorBase:
     """Create data collector."""
-    create_env_fn_ = (
-        create_env_fn(**kwargs)
-        if num_collectors == 1
-        else [create_env_fn(**kwargs)] * num_collectors
-    )
+    if isinstance(create_env_fn, EnvBase):
+        create_env_fn_ = create_env_fn(**kwargs)
+    elif callable(create_env_fn):
+        create_env_fn_ = (
+            create_env_fn(**kwargs)
+            if num_collectors == 1
+            else [create_env_fn(**kwargs)] * num_collectors
+        )
+    elif isinstance(create_env_fn, (list, tuple)):
+        create_env_fn_ = [f(**kwargs) for f in create_env_fn_ if callable(f)]
+    else:
+        raise TypeError(
+            f"`create_env_fn` must be {EnvBase} | {_CREATE_ENV_FN_TYPE} | {ty.Sequence[_CREATE_ENV_FN_TYPE]}."
+        )
     params = dict(
         create_env_fn=create_env_fn_,
         policy=actor,
@@ -81,7 +90,7 @@ class CollectorDataset(IterableDataset):
 
     def __init__(
         self,
-        env: EnvBase | ty.Sequence[ty.Callable[..., EnvBase]],
+        create_env_fn: EnvBase | ty.Callable[..., EnvBase] | ty.Sequence[ty.Callable[..., EnvBase]],
         policy_module: TensorDictModule,
         frames_per_batch: int,
         total_frames: int,
@@ -97,7 +106,7 @@ class CollectorDataset(IterableDataset):
         # Attributes
         self.batch_size = batch_size
         self.device = device
-        self.env = env
+        self.create_env_fn = create_env_fn
         self.policy_module = policy_module
         self.frames_per_batch = frames_per_batch
         self.total_frames = total_frames
@@ -105,12 +114,21 @@ class CollectorDataset(IterableDataset):
         self.reshape = reshape
         # Get num envs
         num_collectors = 1
-        if isinstance(self.env, ty.Sequence):
-            num_collectors = len(self.env)
+        if isinstance(self.create_env_fn, ty.Sequence):
+            num_collectors = len(self.create_env_fn)
         self.num_collectors = num_collectors
+
+        collector = make_collector(
+            create_env_fn=self.create_env_fn,
+            actor=self.policy_module,
+            num_collectors=self.num_collectors,
+            device=self.device,
+            collector_type=self.collector_type,
+        )
+
         # Collector's params
         params = dict(
-            create_env_fn=self.env,
+            create_env_fn=self.create_env_fn,
             policy=self.policy_module,
             frames_per_batch=self.frames_per_batch,
             total_frames=self.total_frames,
