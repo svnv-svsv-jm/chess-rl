@@ -14,7 +14,7 @@ from torchrl.envs import ExplorationType
 
 from shark.env import make_chess_env
 from shark.models.utils import make_chess_actor_critic
-from shark.datasets import make_collector
+from shark.datasets import make_chess_collector
 
 
 @pytest.mark.parametrize(
@@ -71,7 +71,7 @@ def test_discretecql_w_chess(
         optimizer = torch.optim.Adam(loss_module.parameters(), lr=1e-3)
         # Create env and data collector
         device = torch.device("cpu")
-        collector = make_collector(
+        collector = make_chess_collector(
             engine_executable=engine_executable,
             actor=policy_module,
             num_collectors=num_collectors,

@@ -1,4 +1,4 @@
-__all__ = ["CollectorDataset", "make_collector"]
+__all__ = ["CollectorDataset", "make_collector", "make_chess_collector"]
 
 from loguru import logger
 import typing as ty
@@ -19,23 +19,23 @@ from .patch import SyncDataCollector
 
 
 def make_collector(
-    engine_executable: str,
+    create_env_fn: ty.Callable[..., EnvBase],
     actor: TensorDictModule,
     num_collectors: int,
     device: torch.device,
     collector_type: str,
-    num_workers: int,
-    parallel: bool,
+    # num_workers: int,
+    # parallel: bool,
+    **kwargs: ty.Any,
 ) -> DataCollectorBase:
     """Create data collector."""
-    create_env_fn = (
-        make_chess_env(engine_executable, num_workers=num_workers, parallel=parallel)
+    create_env_fn_ = (
+        create_env_fn(**kwargs)
         if num_collectors == 1
-        else [make_chess_env(engine_executable, num_workers=num_workers, parallel=parallel)]
-        * num_collectors
+        else [create_env_fn(**kwargs)] * num_collectors
     )
     params = dict(
-        create_env_fn=create_env_fn,
+        create_env_fn=create_env_fn_,
         policy=actor,
         frames_per_batch=1,
         total_frames=10,
@@ -58,6 +58,23 @@ def make_collector(
     else:
         raise ValueError(f"Invalid collector type {collector_type}.")
     return collector
+
+
+def make_chess_collector(
+    *args: ty.Any,
+    engine_executable: str,
+    num_workers: int,
+    parallel: bool,
+    **kwargs: ty.Any,
+) -> DataCollectorBase:
+    """Create data collector."""
+    return make_collector(
+        *args,
+        engine_executable=engine_executable,
+        num_workers=num_workers,
+        parallel=parallel,
+        **kwargs,
+    )
 
 
 class CollectorDataset(IterableDataset):
