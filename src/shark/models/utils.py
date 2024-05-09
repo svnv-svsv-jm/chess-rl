@@ -133,29 +133,76 @@ def initialize(
     """_summary_
 
     Args:
-        policy_module (TensorDictModule): _description_
-        env (EnvBase): _description_
-        model (str): _description_
-        discrete (bool, optional): _description_. Defaults to True.
-        value_nn (torch.nn.Module, optional): _description_. Defaults to None.
-        flatten_state (bool, optional): _description_. Defaults to False.
-        loss_function (str, optional): _description_. Defaults to "smooth_l1".
-        alpha_init (float, optional): _description_. Defaults to 1.
-        tau (float, optional): _description_. Defaults to None.
-        gamma (float, optional): _description_. Defaults to None.
-        lmbda (float, optional): _description_. Defaults to None.
-        clip_epsilon (float, optional): _description_. Defaults to 0.2.
-        entropy_bonus (bool, optional): _description_. Defaults to True.
-        samples_mc_entropy (int, optional): _description_. Defaults to 1.
-        entropy_coef (float, optional): _description_. Defaults to 0.01.
+        policy_module (TensorDictModule):
+            Policy module.
 
-    Raises:
-        ValueError: _description_
-        ValueError: _description_
-        ValueError: _description_
+        env (EnvBase):
+            RL enviroment.
+
+        model (str, optional):
+            Type of model (e.g. `"cql"`, `"ppo"`). Defaults to `"ppo"`.
+
+        discrete (bool, optional):
+            Whether action space is discrete. Defaults to `True`.
+
+        value_nn (torch.nn.Module, optional):
+            Neural arcitecture for the value/critic network. Defaults to `None`.
+
+        flatten_state (bool, optional):
+            Whether to flatten the state tensor. Defaults to `False`.
+
+        loss_function (str, optional):
+            Loss function to be used with the value function loss (see :class:`torchrl.objectives.CQLLoss`).
+            Or loss function for the value discrepancy. Can be one of `"l1"`, `"l2"` or `"smooth_l1"` (see :class:`torchrl.objectives.ClipPPOLoss`).
+            Defaults to `"smooth_l1"`.
+
+        alpha_init (float, optional):
+            Initial entropy multiplier (see :class:`torchrl.objectives.CQLLoss`). Defaults to `1`.
+
+        tau (float, optional):
+            Polyak tauvalue. It is equal to `1-eps`.
+            This was proposed in "CONTINUOUS CONTROL WITH DEEP REINFORCEMENT LEARNING", https://arxiv.org/pdf/1509.02971.pdf.
+            Also see :class:`torchrl.objectives.SoftUpdate`.
+            Defaults to `1e-2`.
+
+        gamma (float, optional):
+            Coefficients for the value estimator (exponential mean discount).
+            Also see :class:`torchrl.objectives.GAE`.
+            Defaults to `0.99`.
+
+        lmbda (float, optional):
+            Trajectory discount. See :class:`torchrl.objectives.GAE`.
+            Defaults to `0.95`.
+
+        clip_epsilon (float, optional):
+            Weight clipping threshold in the clipped PPO loss equation (see :class:`torchrl.objectives.ClipPPOLoss`).
+            Defaults to `0.2`.
+
+        entropy_bonus (bool, optional):
+            If `True`, an entropy bonus will be added to the loss to favour exploratory policies.
+            Defaults to `True`.
+
+        samples_mc_entropy (int, optional):
+            If the distribution retrieved from the policy
+            operator does not have a closed form
+            formula for the entropy, a Monte-Carlo estimate will be used.
+            `samples_mc_entropy` will control how many
+            samples will be used to compute this estimate (see :class:`torchrl.objectives.ClipPPOLoss`).
+            Defaults to ``1``.
+
+        entropy_coef (float, optional):
+            Entropy multiplier when computing the total loss (see :class:`torchrl.objectives.ClipPPOLoss`).
+            Defaults to `0.01`.
 
     Returns:
-        ty.Dict[str, ty.Optional[TensorDictModule]]: _description_
+        ty.Dict[str, ty.Optional[TensorDictModule]]:
+            Dictionary with the initialized `TensorDictModule` objects.
+            >>> dict(
+                loss_module=loss_module,
+                advantage_module=advantage_module,
+                value_module=value_module,
+                target_net_updater=target_net_updater,
+            )
     """
     policy_module = policy_module.to(env.device)
     target_net_updater = None

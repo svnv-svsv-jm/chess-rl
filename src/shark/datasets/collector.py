@@ -1,20 +1,63 @@
-__all__ = ["CollectorDataset"]
+__all__ = ["CollectorDataset", "make_collector"]
 
 from loguru import logger
 import typing as ty
 import torch
 from torch.utils.data import IterableDataset
 from torchrl.data import MultiStep
-from torchrl.collectors import MultiSyncDataCollector, MultiaSyncDataCollector
+from torchrl.collectors import MultiSyncDataCollector, MultiaSyncDataCollector, DataCollectorBase
 from torchrl.data.replay_buffers import ReplayBuffer
 from torchrl.data.replay_buffers.samplers import SamplerWithoutReplacement
 from torchrl.data.replay_buffers.storages import LazyTensorStorage
-from torchrl.envs import EnvBase
+from torchrl.envs import EnvBase, ExplorationType
 from tensordict.nn import TensorDictModule
 from tensordict import TensorDict
 
+from shark.env import make_chess_env
 from shark.utils import find_device
 from .patch import SyncDataCollector
+
+
+def make_collector(
+    engine_executable: str,
+    actor: TensorDictModule,
+    num_collectors: int,
+    device: torch.device,
+    collector_type: str,
+    num_workers: int,
+    parallel: bool,
+) -> DataCollectorBase:
+    """Create data collector."""
+    create_env_fn = (
+        make_chess_env(engine_executable, num_workers=num_workers, parallel=parallel)
+        if num_collectors == 1
+        else [make_chess_env(engine_executable, num_workers=num_workers, parallel=parallel)]
+        * num_collectors
+    )
+    params = dict(
+        create_env_fn=create_env_fn,
+        policy=actor,
+        frames_per_batch=1,
+        total_frames=10,
+        # this is the default behaviour: the collector runs in ``"random"`` (or explorative) mode
+        exploration_type=ExplorationType.RANDOM,
+        # We set the all the devices to be identical. Below is an example of
+        # heterogeneous devices
+        device=device,
+        storing_device=device,
+        split_trajs=False,
+        postproc=MultiStep(gamma=0.98, n_steps=5),
+    )
+    collector_type = collector_type.lower()
+    if collector_type in ["sync"]:
+        collector = SyncDataCollector(**params)
+    elif collector_type in ["multi", "multi-sync", "multisync"]:
+        collector = MultiSyncDataCollector(**params)
+    elif collector_type in ["multiasync", "multi-async"]:
+        collector = MultiaSyncDataCollector(**params)
+    else:
+        raise ValueError(f"Invalid collector type {collector_type}.")
+    return collector
 
 
 class CollectorDataset(IterableDataset):
@@ -32,6 +75,7 @@ class CollectorDataset(IterableDataset):
         init_random_frames: int = 1,
         collector_type: str = "sync",
         postproc: ty.Optional[torch.nn.Module] = MultiStep(gamma=0.98, n_steps=5),
+        reshape: bool = True,
         **kwargs: ty.Any,
     ) -> None:
         # Attributes
@@ -42,6 +86,7 @@ class CollectorDataset(IterableDataset):
         self.frames_per_batch = frames_per_batch
         self.total_frames = total_frames
         self.collector_type = collector_type
+        self.reshape = reshape
         # Get num envs
         num_collectors = 1
         if isinstance(self.env, ty.Sequence):
@@ -88,13 +133,16 @@ class CollectorDataset(IterableDataset):
         """Yield experiences from `SyncDataCollector` and store them in `ReplayBuffer`."""
         i = 0
         for i, tensordict_data in enumerate(self.collector):
-            logger.trace(f"Collecting {i}")
             assert isinstance(tensordict_data, TensorDict)
-            data_view: TensorDict = tensordict_data.reshape(-1)
+            if self.reshape:
+                data_view: TensorDict = tensordict_data.reshape(-1)
+            else:
+                data_view = tensordict_data
+            logger.trace(f"Collecting ({i}): {data_view.shape} | {data_view.device}")
             self.replay_buffer.extend(data_view.cpu())
             yield tensordict_data.to(self.device)
 
-    def sample(self, **kwargs: ty.Any) -> TensorDict:
+    def sample(self, *args: ty.Any, **kwargs: ty.Any) -> TensorDict:
         """Sample from `ReplayBuffer`."""
-        data: TensorDict = self.replay_buffer.sample(**kwargs)
+        data: TensorDict = self.replay_buffer.sample(*args, **kwargs)
         return data.to(self.device)

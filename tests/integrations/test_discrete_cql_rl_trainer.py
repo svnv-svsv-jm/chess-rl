@@ -5,64 +5,16 @@ import sys, os
 
 import uuid, tempfile
 import torch
-from tensordict.nn import TensorDictModule
 from torchrl.modules import QValueActor
-from torchrl.data import LazyMemmapStorage, MultiStep, TensorDictReplayBuffer
+from torchrl.data import LazyMemmapStorage, TensorDictReplayBuffer
 from torchrl.objectives import DiscreteCQLLoss, SoftUpdate
 from torchrl.trainers import LogReward, Recorder, ReplayBufferTrainer, Trainer, UpdateWeights
-from torchrl.collectors import (
-    MultiaSyncDataCollector,
-    MultiSyncDataCollector,
-    SyncDataCollector,
-    DataCollectorBase,
-)
 from torchrl.record.loggers.csv import CSVLogger
 from torchrl.envs import ExplorationType
 
 from shark.env import make_chess_env
 from shark.models.utils import make_chess_actor_critic
-
-
-def _make_collector(
-    engine_executable: str,
-    actor: TensorDictModule,
-    num_collectors: int,
-    device: torch.device,
-    collector_type: str,
-    num_workers: int,
-    parallel: bool,
-) -> DataCollectorBase:
-    """Create data collector."""
-    create_env_fn = (
-        make_chess_env(engine_executable, num_workers=num_workers, parallel=parallel)
-        if num_collectors == 1
-        else [make_chess_env(engine_executable, num_workers=num_workers, parallel=parallel)]
-        * num_collectors
-    )
-    params = dict(
-        create_env_fn=create_env_fn,
-        policy=actor,
-        frames_per_batch=1,
-        total_frames=10,
-        # this is the default behaviour: the collector runs in ``"random"`` (or explorative) mode
-        exploration_type=ExplorationType.RANDOM,
-        # We set the all the devices to be identical. Below is an example of
-        # heterogeneous devices
-        device=device,
-        storing_device=device,
-        split_trajs=False,
-        postproc=MultiStep(gamma=0.98, n_steps=5),
-    )
-    collector_type = collector_type.lower()
-    if collector_type in ["sync"]:
-        collector = SyncDataCollector(**params)
-    elif collector_type in ["multi", "multi-sync", "multisync"]:
-        collector = MultiSyncDataCollector(**params)
-    elif collector_type in ["multiasync", "multi-async"]:
-        collector = MultiaSyncDataCollector(**params)
-    else:
-        raise ValueError(f"Invalid collector type {collector_type}.")
-    return collector
+from shark.datasets import make_collector
 
 
 @pytest.mark.parametrize(
@@ -119,7 +71,7 @@ def test_discretecql_w_chess(
         optimizer = torch.optim.Adam(loss_module.parameters(), lr=1e-3)
         # Create env and data collector
         device = torch.device("cpu")
-        collector = _make_collector(
+        collector = make_collector(
             engine_executable=engine_executable,
             actor=policy_module,
             num_collectors=num_collectors,

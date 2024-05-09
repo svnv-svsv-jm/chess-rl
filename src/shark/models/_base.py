@@ -33,29 +33,57 @@ class BaseRL(RLTrainingLoop):
     ) -> None:
         """
         Args:
-            env (ty.Union[str, EnvBase], optional): _description_. Defaults to "InvertedDoublePendulum-v4".
-            num_cells (int, optional): _description_. Defaults to 256.
-            lr (float, optional): _description_. Defaults to 3e-4.
-            max_grad_norm (float, optional): _description_. Defaults to 1.0.
-            frame_skip (int, optional): _description_. Defaults to 1.
-            frames_per_batch (int, optional): _description_. Defaults to 100.
-            total_frames (int, optional): _description_. Defaults to 100_000.
-            accelerator (ty.Union[str, torch.device], optional): _description_. Defaults to "cpu".
-            sub_batch_size (int, optional):
-                Cardinality of the sub-samples gathered from the current data in the inner loop.
-                Defaults to `1`.
-            clip_epsilon (float, optional): _description_. Defaults to 0.2.
-            gamma (float, optional): _description_. Defaults to 0.99.
-            lmbda (float, optional): _description_. Defaults to 0.95.
-            entropy_eps (float, optional): _description_. Defaults to 1e-4.
-            lr_monitor (str, optional): _description_. Defaults to "loss/train".
-            lr_monitor_strict (bool, optional): _description_. Defaults to False.
-            rollout_max_steps (int, optional): _description_. Defaults to 1000.
-            n_mlp_layers (int, optional): _description_. Defaults to 3.
-            flatten (bool, optional): _description_. Defaults to False.
-            flatten_start_dim (int, optional): _description_. Defaults to 0.
-            legacy (bool, optional): _description_. Defaults to False.
-            automatic_optimization (bool, optional): _description_. Defaults to True.
+            actor_nn (torch.nn.Module):
+                Neural network for the actor.
+
+            value_nn (torch.nn.Module, optional):
+                Neural network for the critic. Defaults to `None`.
+
+            env_name (str, optional):
+                Name of the gym environment. Defaults to `"InvertedDoublePendulum-v4"`.
+
+            model (str, optional):
+                Type of model (e.g. `"cql"`, `"ppo"`). Defaults to `"ppo"`.
+
+            gamma (float, optional):
+                Coefficients for the value estimator (exponential mean discount).
+                Also see :class:`torchrl.objectives.GAE`.
+                Defaults to `0.99`.
+
+            lmbda (float, optional):
+                Trajectory discount. See :class:`torchrl.objectives.GAE`.
+                Defaults to `0.95`.
+
+            entropy_eps (float, optional):
+                Entropy multiplier when computing the total loss.
+                Defaults to `1e-4`.
+
+            clip_epsilon (float, optional):
+                Weight clipping threshold in the clipped PPO loss equation (see :class:`torchrl.objectives.ClipPPOLoss`).
+                Defaults to `0.2`.
+
+            alpha_init (float, optional):
+                Initial entropy multiplier (see :class:`torchrl.objectives.CQLLoss`). Defaults to `1`.
+
+            loss_function (str, optional):
+                Loss function to be used with the value function loss (see :class:`torchrl.objectives.CQLLoss`).
+                Or loss function for the value discrepancy. Can be one of `"l1"`, `"l2"` or `"smooth_l1"` (see :class:`torchrl.objectives.ClipPPOLoss`).
+                Defaults to `"smooth_l1"`.
+
+            flatten_state (bool, optional):
+                Whether to flatten the state tensor. Defaults to `False`.
+
+            tau (float, optional):
+                Polyak tauvalue. It is equal to `1-eps`.
+                This was proposed in "CONTINUOUS CONTROL WITH DEEP REINFORCEMENT LEARNING", https://arxiv.org/pdf/1509.02971.pdf.
+                Also see :class:`torchrl.objectives.SoftUpdate`.
+                Defaults to `1e-2`.
+
+            discrete (bool, optional):
+                Whether action space is discrete. Defaults to `False`.
+
+            qvalue_actor (bool, optional):
+                Whether to use the Q-Value actor. Defaults to `False`.
         """
         self.save_hyperparameters(
             ignore=[

@@ -24,7 +24,7 @@ def test_cql_pytorch(engine_executable: str) -> None:
     optimizer = cfg["optimizer"]
     for idx, batch in enumerate(loader):
         model.advantage(batch)
-        subdata: TensorDict = model.replay_buffer.sample(model.sub_batch_size)
+        subdata: TensorDict = model.sample(model.sub_batch_size)
         logger.info(f"Sampled data: {subdata}")
         loss_vals = model.loss(subdata.to(model.device))
         loss, losses = model.collect_loss(loss_vals)

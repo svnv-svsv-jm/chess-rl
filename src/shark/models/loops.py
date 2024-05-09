@@ -144,6 +144,10 @@ class RLTrainingLoop(pl.LightningModule):
             )
         return self._dataset
 
+    def sample(self, *args: ty.Any, **kwargs: ty.Any) -> TensorDict:
+        """Sample from replay buffer."""
+        return self.dataset.sample(*args, **kwargs)
+
     def setup(self, stage: str = None) -> None:
         """Set up collector."""
         logger.debug(f"device: {self.device}")
