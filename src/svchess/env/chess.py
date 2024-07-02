@@ -6,29 +6,20 @@ from loguru import logger
 import os
 from pathlib import Path
 import chess
-from chess.engine import SimpleEngine, PovScore
+from chess.engine import SimpleEngine
 import torch
-from tensordict import TensorDict, TensorDictBase
-from tensordict.nn import TensorDictModule
-from torchrl.data import (
-    BoundedTensorSpec,
-    CompositeSpec,
-    UnboundedContinuousTensorSpec,
-    BinaryDiscreteTensorSpec,
-    DiscreteTensorSpec,
-)
+from torch import Tensor
+from tensordict import TensorDict
 
-from torchrl.envs import (
-    CatTensors,
-    EnvBase,
-    Transform,
-    TransformedEnv,
-    UnsqueezeTransform,
-)
-from torchrl.envs.transforms.transforms import _apply_to_composite
-from torchrl.envs.utils import check_env_specs, step_mdp
+from torchrl.envs import EnvBase
 
-from svchess.utils import get_random_move, action_dict, board_to_tensor, play_move
+from svchess.utils import (
+    get_random_move,
+    action_dict,
+    board_to_tensor,
+    play_move,
+    action_int_to_move,
+)
 from .utils import make_specs
 
 
@@ -217,11 +208,25 @@ class Chess(EnvBase):
         Returns:
             TensorDict: Next state, reward and done signal.
         """
+        # Action is an integer Tensor
+        action: Tensor = tensordict["action"]
+        # Convert to move and push
+        move = action_int_to_move(action)
+        if self.board.is_legal(move):
+            self.board.push(move)
+            reward = torch.Tensor([1])
+            done = torch.Tensor([False])
+        else:
+            reward = torch.Tensor([-1])
+            done = torch.Tensor([True])
+
+        # Return
+        state = board_to_tensor(self.board, flatten=False, one_hot=False)
         out = TensorDict(
             {
-                "state": torch.zeros(8, 8).int().to(self.device),
-                "reward": torch.Tensor([1]).float().to(self.device),
-                "done": torch.Tensor([False]).bool().to(self.device),
+                "state": state.int().to(self.device),
+                "reward": reward.float().to(self.device),
+                "done": done.bool().to(self.device),
             },
             batch_size=tensordict.shape,
             device=self.device,

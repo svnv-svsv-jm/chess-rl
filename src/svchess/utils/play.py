@@ -6,6 +6,15 @@ from chess.engine import SimpleEngine
 from .moves import get_random_move
 
 
+def _engine_play(board: chess.Board, engine: SimpleEngine) -> chess.Board:
+    """Helper."""
+    result = engine.play(board, chess.engine.Limit(time=0.1))
+    move = result.move
+    assert move is not None
+    board.push(move)
+    return board
+
+
 def play_move(
     board: chess.Board,
     engine_executable: str = None,
@@ -36,17 +45,8 @@ def play_move(
     # Sample random move
     else:
         move = get_random_move(board)
-        if move is None:
+        if move is None:  # pragma: no cover
             raise RuntimeError("Failed to sample a random move.")
         board.push(move)
 
-    return board
-
-
-def _engine_play(board: chess.Board, engine: SimpleEngine) -> chess.Board:
-    """Helper."""
-    result = engine.play(board, chess.engine.Limit(time=0.1))
-    move = result.move
-    assert move is not None
-    board.push(move)
     return board

@@ -1,8 +1,9 @@
-__all__ = ["get_random_move", "action_dict"]
+__all__ = ["get_random_move", "action_dict", "action_int_to_uci", "action_int_to_move"]
 
 import typing as ty
 from loguru import logger
 
+from torch import Tensor
 import random
 import chess
 
@@ -19,7 +20,7 @@ def get_random_move(board: chess.Board) -> ty.Optional[chess.Move]:
 
 
 def action_dict() -> ty.Dict[str, int]:
-    """Create a one-hot tensor of all possible moves and the action dictionary.
+    """Creates the action dictionary.
 
     Returns:
         torch.Tensor: (N,)
@@ -43,3 +44,21 @@ def action_dict() -> ty.Dict[str, int]:
     action_dict: ty.Dict[str, int] = {move: i for i, move in enumerate(unique_moves)}
     # Return
     return action_dict
+
+
+def action_int_to_uci(action: int | Tensor) -> str | None:
+    """Converts input integer to move UCI."""
+    a_dict = action_dict()
+    for key, value in a_dict.items():
+        if value == action:
+            return key
+    return None  # pragma: no cover
+
+
+def action_int_to_move(action: int | Tensor) -> chess.Move:
+    """Converts input integer to move."""
+    move_uci = action_int_to_uci(action)
+    if move_uci is None:  # pragma: no cover
+        raise RuntimeError(f"Could not convert action: {action}.")
+    move = chess.Move.from_uci(move_uci)
+    return move
