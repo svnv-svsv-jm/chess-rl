@@ -1,4 +1,5 @@
 import typing as ty
+from torch import Tensor
 
 FREE_SQUARE: ty.Final[str] = "free"
 PAWN_BLACK: ty.Final[str] = "p"
@@ -34,3 +35,16 @@ PIECES_DICT: ty.Final[ty.Dict[str, int]] = {
 N_PIECES: ty.Final[int] = len(list(PIECES_DICT.values()))
 
 N_ACTIONS: ty.Final[int] = 8 * 8
+
+INITIAL_STATE: ty.Final[Tensor] = Tensor(
+    [
+        [8, 7, 0, 0, 0, 0, 1, 2],
+        [9, 7, 0, 0, 0, 0, 1, 3],
+        [10, 7, 0, 0, 0, 0, 1, 4],
+        [11, 7, 0, 0, 0, 0, 1, 5],
+        [12, 7, 0, 0, 0, 0, 1, 6],
+        [10, 7, 0, 0, 0, 0, 1, 4],
+        [9, 7, 0, 0, 0, 0, 1, 3],
+        [8, 7, 0, 0, 0, 0, 1, 2],
+    ]
+)

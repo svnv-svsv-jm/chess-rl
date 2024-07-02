@@ -28,54 +28,14 @@ from torchrl.envs import (
 from torchrl.envs.transforms.transforms import _apply_to_composite
 from torchrl.envs.utils import check_env_specs, step_mdp
 
-from svchess.utils.const import N_PIECES, N_ACTIONS
-from svchess.utils.moves import get_random_move, action_dict
+from svchess.utils import get_random_move, action_dict, board_to_tensor, play_move
 from .utils import make_specs
 
 
 class Chess(EnvBase):
-    """Chess RL environment."""
+    """Chess RL environment.
 
-    def __init__(
-        self,
-        engine_path: str = None,
-        timeout: float = 5,
-        device: torch.device | str | int | None = None,
-        batch_size: torch.Size | None = None,
-        run_type_checks: bool = True,
-        allow_done_after_reset: bool = False,
-    ):
-        """
-        Args:
-            engine_path (str):
-                Path to chess engine. This class needs a usable chess engine.
-                For example: `stockfish`.
-                If not passed, this class will read from the `CHESS_ENGINE_EXECUTABLE` environment variable.
-                If not set, a warning will be raised.
-                Please make sure to install a chess engine like Stockfish, and pass the correct installation path here.
-
-            timeout (float, optional):
-                Timeout value in seconds for engine.
-                When the chess engine is called to validate a position or play a move, this will be the timeout for that.
-                Defaults to `5`.
-
-            device (torch.device): The device of the environment. Deviceless environments
-                are allowed (device=None). If not `None`, all specs will be cast
-                on that device and it is expected that all inputs and outputs will
-                live on that device.
-                Defaults to `None`.
-
-            batch_size (torch.Size or equivalent, optional): batch-size of the environment.
-                Corresponds to the leading dimension of all the input and output
-                tensordicts the environment reads and writes. Defaults to an empty batch-size.
-
-            run_type_checks (bool, optional): If `True`, type-checks will occur
-                at every reset and every step. Defaults to `False`.
-
-            allow_done_after_reset (bool, optional): if `True`, an environment can
-                be done after a call to :meth:`~.reset` is made. Defaults to `False`.
-
-        Attributes:
+    Attributes:
             done_spec (CompositeSpec): equivalent to `full_done_spec` as all
                 `done_specs` contain at least a `"done"` and a `"terminated"` entry
 
@@ -127,6 +87,50 @@ class Chess(EnvBase):
 
             rollout (Callable, ... -> TensorDictBase):
                 Executes a rollout in the environment with the given policy (or random steps if no policy is provided)
+    """
+
+    def __init__(
+        self,
+        engine_path: str = None,
+        timeout: float = 5,
+        play_as: bool = True,
+        device: torch.device | str | int | None = None,
+        batch_size: torch.Size | None = None,
+        run_type_checks: bool = True,
+        allow_done_after_reset: bool = False,
+    ):
+        """
+        Args:
+            engine_path (str):
+                Path to chess engine. This class needs a usable chess engine.
+                For example: `stockfish`.
+                If not passed, this class will read from the `CHESS_ENGINE_EXECUTABLE` environment variable.
+                If not set, a warning will be raised.
+                Please make sure to install a chess engine like Stockfish, and pass the correct installation path here.
+
+            timeout (float, optional):
+                Timeout value in seconds for engine.
+                When the chess engine is called to validate a position or play a move, this will be the timeout for that.
+                Defaults to `5`.
+
+            play_as (bool, optional):
+                If `True`, you play as white. Defaults to `True`.
+
+            device (torch.device): The device of the environment. Deviceless environments
+                are allowed (device=None). If not `None`, all specs will be cast
+                on that device and it is expected that all inputs and outputs will
+                live on that device.
+                Defaults to `None`.
+
+            batch_size (torch.Size or equivalent, optional): batch-size of the environment.
+                Corresponds to the leading dimension of all the input and output
+                tensordicts the environment reads and writes. Defaults to an empty batch-size.
+
+            run_type_checks (bool, optional): If `True`, type-checks will occur
+                at every reset and every step. Defaults to `False`.
+
+            allow_done_after_reset (bool, optional): if `True`, an environment can
+                be done after a call to :meth:`~.reset` is made. Defaults to `False`.
         """
         super().__init__(
             device=device,
@@ -142,6 +146,7 @@ class Chess(EnvBase):
             logger.warning(f"Chess engine not found at {engine_path}.")
         self.engine_path = engine_path
         self.timeout = timeout
+        self.play_as = play_as
 
         # State
         self.board = chess.Board()
@@ -158,6 +163,50 @@ class Chess(EnvBase):
         # Log done
         logger.debug(f"Created {self.__class__.__name__} env.")
 
+    def _set_seed(self, seed: int) -> None:
+        """The `_set_seed()` method sets the seed of any random number generator in the environment.
+
+        Here we don't use any randomness but you can imagine a scenario where we initialize the state to a random value or add noise to the output observation in which case setting the random seed for reproducibility purposes would be very helpfull.
+
+        Args:
+            seed (int):
+                Seed for RNG.
+        """
+        pass
+
+    def _reset(self, tensordict: TensorDict = None) -> TensorDict:
+        """Reset the chess board to its starting position."
+
+        Args:
+            tensordict (TensorDict, optional):
+                Input `TensorDict` object. Needed only for the `.shape` attribute.
+
+        Returns
+            tensordict (TensorDict):
+                Reset state.
+        """
+        if tensordict is None or tensordict.is_empty():
+            batch_size = self.batch_size
+        else:
+            batch_size = tensordict.shape
+
+        # Reset board
+        self.board = chess.Board()
+        # If playing as black, let opponent move
+        if not self.play_as:
+            self.board = play_move(self.board, self.engine_path)
+
+        # Return
+        state = board_to_tensor(self.board, flatten=False, one_hot=False)
+        out = TensorDict(
+            {
+                "state": state.int().to(self.device),
+                "done": torch.Tensor([False]).bool().to(self.device),
+            },
+            batch_size=batch_size,
+        )
+        return out
+
     def _step(self, tensordict: TensorDict) -> TensorDict:
         """Step method.
 
@@ -166,7 +215,7 @@ class Chess(EnvBase):
                 Input TensorDict, with `"action"` key.
 
         Returns:
-            TensorDict: _description_
+            TensorDict: Next state, reward and done signal.
         """
         out = TensorDict(
             {
@@ -178,32 +227,6 @@ class Chess(EnvBase):
             device=self.device,
         )
         return out
-
-    def _reset(self, tensordict: TensorDict = None) -> TensorDict:
-        """Reset."""
-        if tensordict is None or tensordict.is_empty():
-            batch_size = self.batch_size
-        else:
-            batch_size = tensordict.shape
-        # Return
-        out = TensorDict(
-            {
-                "state": torch.zeros(8, 8).int().to(self.device),
-                "done": torch.Tensor([False]).bool().to(self.device),
-            },
-            batch_size=batch_size,
-        )
-        return out
-
-    def _set_seed(self, seed: int) -> None:
-        """The `_set_seed()` method sets the seed of any random number generator in the environment.
-
-        Here we don't use any randomness but you can imagine a scenario where we initialize the state to a random value or add noise to the output observation in which case setting the random seed for reproducibility purposes would be very helpfull.
-
-        Args:
-            seed (int):
-                Seed for RNG.
-        """
 
     def sample(self, from_engine: bool = True) -> ty.Optional[TensorDict]:
         """Samples a legal action (chess move).
