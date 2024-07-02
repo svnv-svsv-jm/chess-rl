@@ -94,7 +94,11 @@ def test_discretecql_w_chess(
             )
             # Register hooks
             buffer_hook = ReplayBufferTrainer(
-                TensorDictReplayBuffer(batch_size=4, storage=LazyMemmapStorage(100), prefetch=5),
+                TensorDictReplayBuffer(
+                    batch_size=4,
+                    storage=LazyMemmapStorage(100),
+                    prefetch=5,
+                ),
                 flatten_tensordicts=True,
             )
             buffer_hook.register(trainer)
