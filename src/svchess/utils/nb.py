@@ -10,6 +10,7 @@ import pyrootutils
 
 def nb_init(logger_level: str = "INFO", add_std: bool = False) -> None:
     """Disables warnings and correctly finds the root directory of the project. Very handy when running notebooks.
+
     Args:
         logger_level (str): 'INFO'
             Logging level for loguru's logger.

@@ -25,6 +25,7 @@ PYTHON_EXEC?=python -m
 PYTHONVERSION?=3.10.10
 PYTEST?=pytest
 SYSTEM=$(shell python -c "import sys; print(sys.platform)")
+COVERAGE=99
 # poetry
 PYTHON_KEYRING_BACKEND=keyring.backends.null.Keyring
 POETRY=poetry
@@ -38,6 +39,14 @@ DOCKER_COMMON_FLAGS=--cpus=$(CPUS) --memory=$(MEMORY) --shm-size=$(SHM) --networ
 REGISTRY=registry.gitlab.com/svnv-svsv-jm/chess-rl
 IMAGE=$(PROJECT_NAME)
 IMAGE_PYTHON=/venv/bin/python
+
+
+# -----------
+# utilities
+# -----------
+cleanup:
+	rm .testmon* || echo "all clean: testmon"
+	rm .coverage* || echo "all clean: coverage"
 
 
 # -----------
@@ -60,7 +69,7 @@ mypy:
 	$(PYTHON_EXEC) mypy tests
 
 pytest:
-	$(PYTHON_EXEC) pytest -x --testmon --pylint --cov-fail-under 95
+	$(PYTHON_EXEC) pytest -x --testmon --pylint --cov-fail-under $(COVERAGE)
 
 pytest-nbmake:
 	$(PYTHON_EXEC) pytest -x --testmon --nbmake --overwrite "$(EXAMPLE_DIR)"
@@ -68,6 +77,7 @@ pytest-nbmake:
 test: mypy pytest pytest-nbmake
 
 tests: test
+
 
 # -----------
 # git

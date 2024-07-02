@@ -1,15 +1,15 @@
 __all__ = ["Chess"]
 
-from collections import defaultdict
-from typing import Optional
+import typing as ty
+from loguru import logger
 
-import numpy as np
+import os
+from pathlib import Path
+import chess
+from chess.engine import SimpleEngine, PovScore
 import torch
-import tqdm
 from tensordict import TensorDict, TensorDictBase
 from tensordict.nn import TensorDictModule
-from torch import nn
-
 from torchrl.data import (
     BoundedTensorSpec,
     CompositeSpec,
@@ -28,7 +28,9 @@ from torchrl.envs import (
 from torchrl.envs.transforms.transforms import _apply_to_composite
 from torchrl.envs.utils import check_env_specs, step_mdp
 
-from .const import N_PIECES, N_ACTIONS
+from svchess.utils.const import N_PIECES, N_ACTIONS
+from svchess.utils.moves import get_random_move, action_dict
+from .utils import make_specs
 
 
 class Chess(EnvBase):
@@ -36,14 +38,27 @@ class Chess(EnvBase):
 
     def __init__(
         self,
-        *,
+        engine_path: str = None,
+        timeout: float = 5,
         device: torch.device | str | int | None = None,
         batch_size: torch.Size | None = None,
         run_type_checks: bool = True,
-        allow_done_after_reset: bool = False
+        allow_done_after_reset: bool = False,
     ):
         """
         Args:
+            engine_path (str):
+                Path to chess engine. This class needs a usable chess engine.
+                For example: `stockfish`.
+                If not passed, this class will read from the `CHESS_ENGINE_EXECUTABLE` environment variable.
+                If not set, a warning will be raised.
+                Please make sure to install a chess engine like Stockfish, and pass the correct installation path here.
+
+            timeout (float, optional):
+                Timeout value in seconds for engine.
+                When the chess engine is called to validate a position or play a move, this will be the timeout for that.
+                Defaults to `5`.
+
             device (torch.device): The device of the environment. Deviceless environments
                 are allowed (device=None). If not `None`, all specs will be cast
                 on that device and it is expected that all inputs and outputs will
@@ -120,41 +135,28 @@ class Chess(EnvBase):
             allow_done_after_reset=allow_done_after_reset,
         )
 
-        # action_spec (TensorSpec): the spec of the action. Links to the spec of the leaf action if only one action tensor is to be expected
-        self.action_spec = DiscreteTensorSpec(
-            n=N_ACTIONS,
-            shape=torch.Size([1]),
-            device=self.device,
-            dtype=torch.int,
-        )
+        # Attributes from inputs
+        if engine_path is None:
+            engine_path = os.environ.get("CHESS_ENGINE_EXECUTABLE", "stockfish")
+        if not Path(engine_path).exists():
+            logger.warning(f"Chess engine not found at {engine_path}.")
+        self.engine_path = engine_path
+        self.timeout = timeout
 
-        # observation_spec (CompositeSpec): a composite spec such that `full_observation_spec.zero()` returns a tensordict containing only the leaves encoding the observation of the environment.
-        # Observation space
-        self._state = DiscreteTensorSpec(
-            n=N_PIECES,
-            shape=torch.Size([8, 8]),
-            device=self.device,
-            dtype=torch.int,
-        )
-        self.observation_spec = CompositeSpec(state=self._state)
-        # since the environment is stateless, we expect the previous output as input.
-        # For this, ``EnvBase`` expects some state_spec to be available
-        self.state_spec = self.observation_spec.clone()
+        # State
+        self.board = chess.Board()
 
-        # Unlimited reward space
-        self.reward_spec = UnboundedContinuousTensorSpec(
-            shape=torch.Size([1]),
-            device=self.device,
-            dtype=torch.float32,
-        )
+        # Specs
+        specs = make_specs(self.device)
+        self.done_spec = specs["done_spec"]
+        self.reward_spec = specs["reward_spec"]
+        self.observation_spec = specs["observation_spec"]
+        self.state_spec = specs["state_spec"]
+        self.action_spec = specs["action_spec"]
+        self._state = specs["_state"]
 
-        # done_spec (CompositeSpec): equivalent to `full_done_spec` as all `done_specs` contain at least a `"done"` and a `"terminated"` entry
-        self.done_spec = BinaryDiscreteTensorSpec(
-            n=1,
-            shape=torch.Size([1]),
-            device=self.device,
-            dtype=torch.bool,
-        )
+        # Log done
+        logger.debug(f"Created {self.__class__.__name__} env.")
 
     def _step(self, tensordict: TensorDict) -> TensorDict:
         """Step method.
@@ -202,3 +204,40 @@ class Chess(EnvBase):
             seed (int):
                 Seed for RNG.
         """
+
+    def sample(self, from_engine: bool = True) -> ty.Optional[TensorDict]:
+        """Samples a legal action (chess move).
+
+        Args:
+            from_engine (bool):
+                If `False`, a random legal movei is selected.
+
+        Returns:
+            (TensorDict): TensorDict with the sampled action.
+        """
+        if from_engine:
+            # Get move from engine
+            with SimpleEngine.popen_uci(self.engine_path) as engine:
+                logger.trace(f"Sampling a move from {self.engine_path}")
+                result = engine.play(self.board, chess.engine.Limit(time=self.timeout))
+                move = result.move
+        else:
+            # Get random move
+            move = get_random_move(self.board)
+
+        # Early stop condition
+        if move is None:  # pragma: no cover
+            logger.warning("No legal move by engine...")
+            return None
+
+        # Get action tensor
+        move_idx = action_dict()[move.uci()]
+        action = torch.Tensor([move_idx]).to(self.action_spec.dtype).to(self.device)
+
+        # Return TensorDict
+        td = TensorDict(
+            {"action": action},
+            batch_size=torch.Size(),
+            device=self.device,
+        )
+        return td
