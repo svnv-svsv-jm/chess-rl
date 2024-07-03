@@ -19,6 +19,7 @@ from svchess.utils import (
     board_to_tensor,
     play_move,
     action_int_to_move,
+    engine_eval,
 )
 from .utils import make_specs
 
@@ -85,6 +86,7 @@ class Chess(EnvBase):
         engine_path: str = None,
         timeout: float = 5,
         play_as: bool = True,
+        highest_reward: float = 1000,
         device: torch.device | str | int | None = None,
         batch_size: torch.Size | None = None,
         run_type_checks: bool = True,
@@ -106,6 +108,9 @@ class Chess(EnvBase):
 
             play_as (bool, optional):
                 If `True`, you play as white. Defaults to `True`.
+
+            highest_reward (float, optional):
+                Highest possible reward, when winning. The opposite of his will be rewarded when losing.
 
             device (torch.device): The device of the environment. Deviceless environments
                 are allowed (device=None). If not `None`, all specs will be cast
@@ -138,6 +143,7 @@ class Chess(EnvBase):
         self.engine_path = engine_path
         self.timeout = timeout
         self.play_as = play_as
+        self.highest_reward = highest_reward
 
         # State
         self.board = chess.Board()
@@ -214,10 +220,16 @@ class Chess(EnvBase):
         move = action_int_to_move(action)
         if self.board.is_legal(move):
             self.board.push(move)
-            reward = torch.Tensor([1])
+            r = engine_eval(
+                self.engine_path,
+                self.board,
+                is_white=self.play_as,
+                worst_reward=-self.highest_reward,
+            )
+            reward = torch.Tensor([r])
             done = torch.Tensor([False])
         else:
-            reward = torch.Tensor([-1])
+            reward = torch.Tensor([-self.highest_reward])
             done = torch.Tensor([True])
 
         # Return

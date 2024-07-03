@@ -2,7 +2,6 @@ import typing as ty
 from loguru import logger
 
 import torch
-from tensordict import TensorDict
 from torchrl.data import (
     TensorSpec,
     CompositeSpec,
