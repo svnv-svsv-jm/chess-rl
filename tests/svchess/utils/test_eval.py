@@ -27,6 +27,7 @@ def _tests(r: float, is_white: bool, expected: float) -> None:
         (MATE_IN_ONE_FOR_WHITE, True, -100, 100),
         (chess.Board(), False, -100, -50),
         (chess.Board(), True, -100, 50),
+        (MATE_IN_ONE_FOR_WHITE.mirror(), True, -100, -100),
     ],
 )
 def test_engine_eval_from_path(
@@ -57,6 +58,7 @@ def test_engine_eval_from_path(
         (MATE_IN_ONE_FOR_WHITE, True, -100, 100),
         (chess.Board(), False, -100, -50),
         (chess.Board(), True, -100, 44),
+        (MATE_IN_ONE_FOR_WHITE.mirror(), True, -100, -100),
     ],
 )
 def test_engine_eval_from_engine(
