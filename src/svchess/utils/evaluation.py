@@ -5,12 +5,15 @@ from loguru import logger
 import chess
 from chess.engine import SimpleEngine, PovScore
 
+from .gameover import on_gameover
+
 
 def engine_eval(
     engine: SimpleEngine | str,
     board: chess.Board,
     is_white: bool,
     worst_reward: float,
+    on_draw: float = None,
     **kwargs: ty.Any,
 ) -> float:
     """Let engine evaluate the current position and return it as reward.
@@ -29,6 +32,10 @@ def engine_eval(
         worst_reward (float):
             Worst possible reward, in centipawns.
 
+        on_draw (float):
+            Reward when it is a draw.
+            Defaults to `worst_reward`.
+
         **kwargs (Any):
             Inputs for `chess.engine.Limit()`.
 
@@ -41,6 +48,7 @@ def engine_eval(
             board=board,
             is_white=is_white,
             worst_reward=worst_reward,
+            on_draw=on_draw,
             **kwargs,
         )
     if isinstance(engine, SimpleEngine):
@@ -49,6 +57,7 @@ def engine_eval(
             board=board,
             is_white=is_white,
             worst_reward=worst_reward,
+            on_draw=on_draw,
             **kwargs,
         )
     raise ValueError(f"Engine must be a {str} or an instance of {SimpleEngine}.")
@@ -59,6 +68,7 @@ def _engine_eval(
     board: chess.Board,
     is_white: bool,
     worst_reward: float,
+    on_draw: float = None,
     **kwargs: ty.Any,
 ) -> float:
     """Let engine evaluate the current position and return it as reward.
@@ -76,13 +86,27 @@ def _engine_eval(
         worst_reward (float):
             Worst possible reward.
 
+        on_draw (float):
+            Reward when it is a draw.
+            Defaults to `worst_reward`.
+
         **kwargs (Any):
             Inputs for `chess.engine.Limit()`.
 
     Returns:
         float: Evaluation of current position.
     """
-    logger.trace(f"Evaluating position with {engine}")
+    # Check if game is over
+    reward = on_gameover(
+        board,
+        play_as=is_white,
+        highest_reward=-worst_reward,
+        on_draw=on_draw if on_draw is not None else -worst_reward,
+    )
+    if reward is not None:
+        return reward
+    # Eval
+    logger.trace(f"Evaluating position with {engine} [{kwargs}]")
     info = engine.analyse(board, chess.engine.Limit(**kwargs))
     pov_score: PovScore = info["score"]
     score = pov_score.white() if is_white else pov_score.black()

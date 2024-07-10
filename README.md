@@ -24,11 +24,12 @@ sudo apt-get install stockfish
 
 ## Installation
 
-Create a Python virtual environment and run:
+Create a Python virtual environment and, from the project's root folder, run:
 
 ```bash
 pip install --upgrade pip
 pip install --upgrade poetry
+poetry self update
 poetry install
 ```
 

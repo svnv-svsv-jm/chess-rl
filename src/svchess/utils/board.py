@@ -8,15 +8,16 @@ from torch import Tensor
 from .const import FREE_SQUARE, PIECES_DICT, N_PIECES
 
 
-def board_to_tensor(board: chess.Board, flatten: bool, one_hot: bool = True) -> Tensor:
+def board_to_tensor(board: chess.Board, flatten: bool = False, one_hot: bool = False) -> Tensor:
     """Converts current board to a Tensor.
 
     Args:
         board (chess.Board):
             Chess board to convert to tensor.
 
-        flatten (bool):
+        flatten (bool, optional):
             Whether to flatten the board tensor or not.
+            Defaults to `False`.
 
         one_hot (bool, optional):
             Whether to return a discrete or one-hot representation.

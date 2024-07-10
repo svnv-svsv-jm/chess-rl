@@ -25,7 +25,8 @@ def test_chess_reset(engine_executable: str, device: torch.device, play_as: bool
     # Reset
     td: TensorDict = env.reset()
     state: Tensor = td["state"]
-    logger.info(f"Reset state: {state}")
+    logger.info(f"Reset state: {state.size()}")
+    logger.info(f"INITIAL_STATE: {INITIAL_STATE.size()}")
     # Tests
     eq = state.cpu() == INITIAL_STATE
     if play_as:
@@ -58,8 +59,8 @@ def test_chess_env_manually(engine_executable: str, device: torch.device) -> Non
     state = env.reset()
     logger.info(f"Reset state: {state}")
     # Step
-    action = env.sample(False)
-    action = env.sample(True)
+    action = env.sample(from_engine=False)
+    action = env.sample(from_engine=True)
     logger.info(f"Action: {action}")
     td = env.step(action)
     logger.info(f"Tensordict: {td}")

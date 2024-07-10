@@ -20,6 +20,7 @@ from svchess.utils import (
     play_move,
     action_int_to_move,
     engine_eval,
+    check_winner,
 )
 from .utils import make_specs
 
@@ -85,6 +86,7 @@ class Chess(EnvBase):
         self,
         engine_path: str = None,
         timeout: float = 5,
+        depth: int = 18,
         play_as: bool = True,
         highest_reward: float = 1000,
         device: torch.device | str | int | None = None,
@@ -105,6 +107,9 @@ class Chess(EnvBase):
                 Timeout value in seconds for engine.
                 When the chess engine is called to validate a position or play a move, this will be the timeout for that.
                 Defaults to `5`.
+
+            depth (int, optional):
+                The depth for the engine.
 
             play_as (bool, optional):
                 If `True`, you play as white. Defaults to `True`.
@@ -140,8 +145,10 @@ class Chess(EnvBase):
             engine_path = os.environ.get("CHESS_ENGINE_EXECUTABLE", "stockfish")
         if not Path(engine_path).exists():
             logger.warning(f"Chess engine not found at {engine_path}.")
+        logger.info(f"Chess engine at: {engine_path}")
         self.engine_path = engine_path
         self.timeout = timeout
+        self.depth = depth
         self.play_as = play_as
         self.highest_reward = highest_reward
 
@@ -171,6 +178,31 @@ class Chess(EnvBase):
         """
         pass
 
+    def play_move(self) -> None:
+        """Plays a move."""
+        logger.opt(depth=1).trace(f"Playing move...")
+        self.board = play_move(
+            self.board,
+            self.engine_path,
+            time=self.timeout,
+            depth=self.depth,
+        )
+        logger.opt(depth=1).trace(f"Played move.")
+
+    def engine_eval(self) -> float:
+        """Get evaluation from engine."""
+        logger.opt(depth=1).trace(f"Evaluating position...")
+        r = engine_eval(
+            self.engine_path,
+            self.board,
+            is_white=self.play_as,
+            worst_reward=-self.highest_reward,
+            time=self.timeout,
+            depth=self.depth,
+        )
+        logger.opt(depth=1).trace(f"Evaluated position.")
+        return r
+
     def _reset(self, tensordict: TensorDict = None) -> TensorDict:
         """Reset the chess board to its starting position."
 
@@ -191,10 +223,10 @@ class Chess(EnvBase):
         self.board = chess.Board()
         # If playing as black, let opponent move
         if not self.play_as:
-            self.board = play_move(self.board, self.engine_path)
+            self.play_move()
 
         # Return
-        state = board_to_tensor(self.board, flatten=False, one_hot=False)
+        state = board_to_tensor(self.board)
         out = TensorDict(
             {
                 "state": state.int().to(self.device),
@@ -216,24 +248,37 @@ class Chess(EnvBase):
         """
         # Action is an integer Tensor
         action: Tensor = tensordict["action"]
-        # Convert to move and push
+        # Convert to move
         move = action_int_to_move(action)
+        # We check if the move is legal, else we lose
         if self.board.is_legal(move):
+            # Move is legal, push it
             self.board.push(move)
-            r = engine_eval(
-                self.engine_path,
-                self.board,
-                is_white=self.play_as,
-                worst_reward=-self.highest_reward,
-            )
+            over, _ = check_winner(self.board)
+            # Get evaluation
+            r = self.engine_eval()
+            # Reward
             reward = torch.Tensor([r])
-            done = torch.Tensor([False])
+            done = torch.Tensor([over])
         else:
+            # Lose
+            over = True
             reward = torch.Tensor([-self.highest_reward])
-            done = torch.Tensor([True])
+            done = torch.Tensor([over])
+
+        # Now we need to let the opponent play
+        # Only if we haven't won already
+        if not over:
+            self.play_move()
+            # TODO: check if game is over
+            over, winner = check_winner(self.board)
+            done = torch.Tensor([over])
+            if winner is not None:
+                r = self.highest_reward if winner == self.play_as else -self.highest_reward
+                reward = torch.Tensor([r])
 
         # Return
-        state = board_to_tensor(self.board, flatten=False, one_hot=False)
+        state = board_to_tensor(self.board)
         out = TensorDict(
             {
                 "state": state.int().to(self.device),
