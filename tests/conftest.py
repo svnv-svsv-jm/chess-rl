@@ -37,4 +37,4 @@ def engine(engine_executable: str) -> SimpleEngine:  # type: ignore
 @pytest.fixture
 def device() -> torch.device:
     """Torch device."""
-    return find_device("auto")
+    return find_device("cpu")
