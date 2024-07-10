@@ -40,7 +40,7 @@ def test_chess_reset(engine_executable: str, device: torch.device, play_as: bool
 def test_chess_env(engine_executable: str) -> None:
     """Test `Chess` environment."""
     # Create env
-    env = Chess(engine_path=engine_executable, device=find_device("auto"))
+    env = Chess(engine_path=engine_executable, device=find_device("cpu"))
     # Sanity check
     check_env_specs(env)
 
