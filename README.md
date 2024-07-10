@@ -2,7 +2,7 @@
 
 [![pipeline status](https://gitlab.com/gianmarcoaversanotest/chess/badges/main/pipeline.svg)](https://gitlab.com/gianmarcoaversanotest/chess/-/commits/main) [![coverage report](https://gitlab.com/gianmarcoaversanotest/chess/badges/main/coverage.svg)](https://gitlab.com/gianmarcoaversanotest/chess/-/commits/main) [![Latest Release](https://gitlab.com/gianmarcoaversanotest/chess/-/badges/release.svg)](https://gitlab.com/gianmarcoaversanotest/chess/-/releases)
 
-This repository implements a Chess RL environment using [TorchRL](https://github.com/pytorch/rl).
+This repository implements a Chess RL environment to be used with [TorchRL](https://github.com/pytorch/rl).
 
 ## Idea
 
