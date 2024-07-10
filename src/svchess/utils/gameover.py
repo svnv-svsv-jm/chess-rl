@@ -12,9 +12,9 @@ def check_winner(board: chess.Board) -> ty.Tuple[bool, bool | None]:
         board (chess.Board): Chess board.
 
     Returns:
-        bool:
+        over (bool):
             Whether the game is over or not.
-        bool | None:
+        winner (bool | None):
             `True` if white won, `False` otherwise. `None` if game is drawn or not over.
     """
     outcome = board.outcome()
@@ -35,7 +35,24 @@ def on_gameover(
     highest_reward: float,
     on_draw: float,
 ) -> float | None:
-    """On gameover."""
+    """Decide the reward to return on gameovers.
+
+    Args:
+        board (chess.Board):
+            Chess board.
+
+        play_as (bool):
+            If `True`, it's playing as white.
+
+        highest_reward (float):
+            Highest reward value.
+
+        on_draw (float):
+            Reward value on draw.
+
+    Returns:
+        reward (float | None): Reward.
+    """
     over, winner = check_winner(board)
     if not over:
         return None

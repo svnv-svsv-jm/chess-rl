@@ -6,6 +6,7 @@ import typing as ty
 import pyrootutils
 import torch
 
+import chess
 from chess.engine import SimpleEngine
 
 from svchess.utils import find_device
@@ -26,7 +27,14 @@ def engine_executable() -> str:
     return os.environ.get("CHESS_ENGINE_EXECUTABLE", "stockfish")
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture
+def engine(engine_executable: str) -> SimpleEngine:  # type: ignore
+    """Chess engine."""
+    with SimpleEngine.popen_uci(engine_executable) as engine_:
+        yield engine_
+
+
+@pytest.fixture
 def device() -> torch.device:
     """Torch device."""
     return find_device("auto")

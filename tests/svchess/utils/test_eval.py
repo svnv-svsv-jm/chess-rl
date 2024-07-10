@@ -38,6 +38,9 @@ def test_engine_eval_from_path(
     expected_reward: float,
 ) -> None:
     """Test `engine_eval`."""
+    # Error
+    with pytest.raises(ValueError):
+        engine_eval(None, board=board, is_white=is_white, worst_reward=worst_reward)  # type: ignore
     # Eval
     r = engine_eval(
         engine_executable,

@@ -21,7 +21,7 @@ def test_chess_game(engine_executable: str, device: torch.device, play_as: bool)
     )
     # Play
     while not env.board.is_game_over():
-        td = env.sample()
+        td = env.sample(from_engine=False)
         td = env.step(td)
         logger.info(td)
 

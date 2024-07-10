@@ -10,6 +10,8 @@ from .moves import get_random_move
 
 def _engine_play(board: chess.Board, engine: SimpleEngine, **kwargs: ty.Any) -> chess.Board:
     """Helper."""
+    kwargs.setdefault("depth", 18)
+    kwargs.setdefault("time", 1)
     logger.trace(f"Playing move [{kwargs}]")
     result = engine.play(board, chess.engine.Limit(**kwargs))
     move = result.move
@@ -24,14 +26,14 @@ def play_move(
     engine: SimpleEngine = None,
     **kwargs: ty.Any,
 ) -> chess.Board:
-    """Play move.
+    """Play move, from engine or randomly.
 
     Args:
         board (chess.Board):
             Chess board.
 
         engine_executable (str, optional):
-            Path to chess engine. This class needs a usable chess engine.
+            Path to chess engine. If not given, a random move will be played.
             Defaults to `None`.
 
         **kwargs (Any):

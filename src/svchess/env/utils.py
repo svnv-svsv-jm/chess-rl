@@ -1,3 +1,5 @@
+__all__ = ["PlayingMode", "make_specs"]
+
 import typing as ty
 from loguru import logger
 
@@ -11,6 +13,24 @@ from torchrl.data import (
 )
 
 from svchess.utils.const import N_PIECES, N_ACTIONS
+
+
+class PlayingMode:
+    """Playing mode."""
+
+    ENGINE: str = "engine"
+    RANDOM: str = "random"
+    HYBRID: str = "hybrid"
+
+    @classmethod
+    def all(cls) -> ty.List[str]:
+        """Returns all possibilities."""
+        return [cls.ENGINE.lower(), cls.RANDOM.lower(), cls.HYBRID.lower()]
+
+    @classmethod
+    def isin(cls, val: str) -> bool:
+        """Whether value exists."""
+        return val.lower() in cls.all()
 
 
 def make_specs(device: torch.device) -> ty.Dict[str, TensorSpec]:

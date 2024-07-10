@@ -22,7 +22,7 @@ from svchess.utils import (
     engine_eval,
     check_winner,
 )
-from .utils import make_specs
+from .utils import make_specs, PlayingMode
 
 
 class Chess(EnvBase):
@@ -85,14 +85,15 @@ class Chess(EnvBase):
     def __init__(
         self,
         engine_path: str = None,
-        timeout: float = 5,
-        depth: int = 18,
+        timeout: float = 1,
+        depth: int = 10,
         play_as: bool = True,
         highest_reward: float = 1000,
         device: torch.device | str | int | None = None,
         batch_size: torch.Size | None = None,
         run_type_checks: bool = True,
         allow_done_after_reset: bool = False,
+        playing_mode: str = PlayingMode.ENGINE,
     ):
         """
         Args:
@@ -132,6 +133,9 @@ class Chess(EnvBase):
 
             allow_done_after_reset (bool, optional): if `True`, an environment can
                 be done after a call to :meth:`~.reset` is made. Defaults to `False`.
+
+            playing_mode (str):
+                See `PlayingMode`.
         """
         super().__init__(
             device=device,
@@ -145,12 +149,15 @@ class Chess(EnvBase):
             engine_path = os.environ.get("CHESS_ENGINE_EXECUTABLE", "stockfish")
         if not Path(engine_path).exists():
             logger.warning(f"Chess engine not found at {engine_path}.")
-        logger.info(f"Chess engine at: {engine_path}")
+        logger.debug(f"Chess engine at: {engine_path}")
         self.engine_path = engine_path
         self.timeout = timeout
         self.depth = depth
         self.play_as = play_as
         self.highest_reward = highest_reward
+        self.playing_mode = PlayingMode.ENGINE
+        if PlayingMode.isin(playing_mode):
+            self.playing_mode = playing_mode
 
         # State
         self.board = chess.Board()
@@ -179,7 +186,7 @@ class Chess(EnvBase):
         pass
 
     def play_move(self) -> None:
-        """Plays a move."""
+        """Play move, from engine or randomly."""
         logger.opt(depth=1).trace(f"Playing move...")
         self.board = play_move(
             self.board,
